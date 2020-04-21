@@ -12,30 +12,16 @@ const hasOnlyButton = hasButton =>
 const Notification = props => (
     <li>
         <div className={styles.mainNotifContainer}>
-            <div className={styles.whyContainer}>
-                <div className={styles.why}>
-                    Why am I seeing this?
-                    <span className={styles.whyText}>
-                        #privacyfirst. This notification has been stored in the
-                        code of last update. No connection to our servers has
-                        been made to send it to you.
-                    </span>
-                </div>
-            </div>
             <div className={styles.notifContainer}>
-                <div className={styles.logo}>
-                    <img src="/img/worldbrain-logo-narrow.png" />
-                </div>
                 <div className={styles.content}>
                     <div className={styles.messageWhy}>
                         <div className={styles.titleMessage}>
                             <div className={styles.title}>{props.title}</div>
                             <div
                                 className={styles.message}
-                                dangerouslySetInnerHTML={{
-                                    __html: props.message,
-                                }}
-                            />
+                            >
+                            <p>{props.message}</p>
+                            </div>
                             {props.isShowMore && (
                                 <div
                                     className={styles.showMore}
@@ -52,14 +38,13 @@ const Notification = props => (
                                 {props.buttons}
                             </div>
                             {props.isUnread && (
-                                <img
+                                <div
                                     className={styles.tick}
                                     onClick={props.handleTick}
-                                    title="Mark as Read"
-                                    src={browser.extension.getURL(
-                                        'img/tick_green.svg',
-                                    )}
-                                />
+                                    title="Mark as read"
+                                >
+                                Mark as Read
+                                </div>
                             )}
                         </div>
                     )}

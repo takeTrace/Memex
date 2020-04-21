@@ -6,7 +6,6 @@
     padding: 10px 0px;
     padding-bottom: 0px;
     color: #000;
-    font-family: sans-serif;
     font-size: 13px;
     border: 1px #d2d2d2 solid;
     margin-left: 8px;
@@ -56,7 +55,7 @@
     margin-bottom: 20px;
     font-weight: 200;
     text-align: center;
-    font-family: 'Inter';
+    font-family: 'Poppins', sans-serif;
 }
 
 .learnMore {

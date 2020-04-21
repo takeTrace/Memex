@@ -1,15 +1,13 @@
-import * as fromPairs from 'lodash/fromPairs'
+import fromPairs from 'lodash/fromPairs'
+import { UILogic } from 'ui-logic-core'
+import { UIElement } from 'ui-logic-react'
 
-export interface Event {
-    type: string
-    [key: string]: any
-}
 export type EventProcessor<Dependencies> = (
     args: EventProcessorArgs<Dependencies>,
 ) => EventProcessorResult
 export interface EventProcessorArgs<Dependencies> {
     state: any
-    event: Event
+    event: { type: string; [key: string]: any }
     dependencies: Dependencies
 }
 export interface EventProcessorResult {
@@ -25,7 +23,7 @@ export interface EventDispatch {
     args?: { [key: string]: any }
 }
 export interface ActionMap {
-    [key: string]: (...args) => void
+    [key: string]: () => any
 }
 
 export function compositeEventProcessor<Dependencies = null>(processors: {
@@ -53,9 +51,9 @@ export function handleEvent<Dependencies = null>({
 }: {
     eventProcessor: EventProcessor<Dependencies>
     state: { [key: string]: any }
-    setState: (updates: { [key: string]: any }) => void
-    props: { [key: string]: any }
-    event: Event
+    setState: (...args: any[]) => void
+    props: { [prop: string]: any }
+    event: EventDispatch
     dependencies: Dependencies
     actions: ActionMap
 }) {
@@ -108,7 +106,8 @@ export function _doDispatch(
                 `Dispatched ${type} without handler: ${dispatched.type}`,
             )
         }
-        handler()
+        const args = dispatched.args ? Object.values(dispatched.args) : []
+        handler(...args)
     }
 }
 
@@ -135,15 +134,34 @@ export function setupUiLogicTest({
     inititalState,
     eventNames,
     eventProcessor,
-    actions = {},
-    dependencies = null,
 }) {
     const { state, setState } = fakeState(inititalState)
     const { props, events } = fakeEventProps(eventNames)
     const trigger = reactEventHandler(
         { props, state, setState },
         eventProcessor,
-        { actions, dependencies },
     )
     return { state, setState, props, events, trigger }
+}
+
+// New
+
+export abstract class StatefulUIElement<Props, State, Event> extends UIElement<
+    Props,
+    State,
+    Event
+> {
+    constructor(props: Props, logic: UILogic<State, Event>) {
+        super(props, { logic })
+    }
+}
+
+export abstract class NavigationScreen<
+    Props,
+    State,
+    Event
+> extends StatefulUIElement<Props, State, Event> {
+    constructor(props: Props, options: { logic: UILogic<State, Event> }) {
+        super(props, options.logic)
+    }
 }

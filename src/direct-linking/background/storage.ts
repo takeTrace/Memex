@@ -1,162 +1,66 @@
-import { StorageManager } from '../../search/types'
-import { browser, Tabs, Storage } from 'webextension-polyfill-ts'
+import { Tabs, Storage } from 'webextension-polyfill-ts'
+import Storex from '@worldbrain/storex'
+import {
+    StorageModule,
+    StorageModuleConfig,
+} from '@worldbrain/storex-pattern-modules'
+import {
+    COLLECTION_DEFINITIONS,
+    COLLECTION_NAMES,
+} from '@worldbrain/memex-storage/lib/annotations/constants'
+import { COLLECTION_NAMES as PAGE_COLLECTION_NAMES } from '@worldbrain/memex-storage/lib/pages/constants'
+import { COLLECTION_NAMES as TAG_COLLECTION_NAMES } from '@worldbrain/memex-storage/lib/tags/constants'
+import { COLLECTION_NAMES as LIST_COLLECTION_NAMES } from '@worldbrain/memex-storage/lib/lists/constants'
 
-import { createPageFromTab, Dexie, Tag } from '../../search'
-import { FeatureStorage } from '../../search/storage'
+import { Tag, SearchIndex } from 'src/search'
 import { STORAGE_KEYS as IDXING_PREF_KEYS } from '../../options/settings/constants'
-
-export interface Annotation {
-    pageTitle: string
-    pageUrl: string
-    body: string
-    selector: object
-    createdWhen?: Date
-    lastEdited?: Date
-    url?: string
-    comment?: string
-}
-
-export default class DirectLinkingStorage extends FeatureStorage {
-    static DIRECT_LINKS_COLL = 'directLinks'
-
-    private _browserStorageArea: Storage.StorageArea
-    private _getDb: () => Promise<Dexie>
-
-    constructor({
-        storageManager,
-        browserStorageArea = browser.storage.local,
-        getDb,
-    }: {
-        storageManager: StorageManager
-        browserStorageArea: Storage.StorageArea
-        getDb: () => Promise<Dexie>
-    }) {
-        super(storageManager)
-        this._browserStorageArea = browserStorageArea
-        this._getDb = getDb
-
-        this.storageManager.registry.registerCollection(
-            DirectLinkingStorage.DIRECT_LINKS_COLL,
-            [
-                {
-                    version: new Date(2018, 5, 31),
-                    fields: {
-                        pageTitle: { type: 'text' },
-                        pageUrl: { type: 'url' },
-                        body: { type: 'text' },
-                        selector: { type: 'json' },
-                        createdWhen: { type: 'datetime' },
-                        url: { type: 'string' },
-                    },
-                    indices: [
-                        { field: 'url', pk: true },
-                        { field: 'pageTitle' },
-                        { field: 'body' },
-                        { field: 'createdWhen' },
-                    ],
-                },
-                {
-                    version: new Date(2018, 7, 3),
-                    fields: {
-                        pageTitle: { type: 'text' },
-                        pageUrl: { type: 'url' },
-                        body: { type: 'text' },
-                        comment: { type: 'text' },
-                        selector: { type: 'json' },
-                        createdWhen: { type: 'datetime' },
-                        lastEdited: { type: 'datetime' },
-                        url: { type: 'string' },
-                    },
-                    indices: [
-                        { field: 'url', pk: true },
-                        { field: 'pageTitle' },
-                        { field: 'pageUrl' },
-                        { field: 'body' },
-                        { field: 'createdWhen' },
-                        { field: 'comment' },
-                    ],
-                },
-            ],
-        )
-    }
-
-    private async fetchIndexingPrefs(): Promise<{ shouldIndexLinks: boolean }> {
-        const storage = await this._browserStorageArea.get(
-            IDXING_PREF_KEYS.LINKS,
-        )
-
-        return {
-            shouldIndexLinks: !!storage[IDXING_PREF_KEYS.LINKS],
-        }
-    }
-
-    async insertDirectLink({
-        pageTitle,
-        pageUrl,
-        url,
-        body,
-        selector,
-    }: Annotation) {
-        await this.storageManager
-            .collection(DirectLinkingStorage.DIRECT_LINKS_COLL)
-            .createObject({
-                pageTitle,
-                pageUrl,
-                body,
-                selector,
-                createdWhen: new Date(),
-                lastEdited: {},
-                url,
-                comment: '',
-            })
-    }
-
-    async indexPageFromTab({ id, url }: Tabs.Tab) {
-        const indexingPrefs = await this.fetchIndexingPrefs()
-
-        const page = await createPageFromTab({
-            tabId: id,
-            url,
-            stubOnly: !indexingPrefs.shouldIndexLinks,
-        })
-
-        await page.loadRels(this._getDb)
-
-        // Add new visit if none, else page won't appear in results
-        // TODO: remove once search changes to incorporate assoc. page data apart from bookmarks/visits
-        if (!page.visits.length) {
-            page.addVisit()
-        }
-
-        await page.save(this._getDb)
-    }
-}
+import { AnnotationsListPlugin } from 'src/search/background/annots-list'
+import { AnnotSearchParams } from 'src/search/background/types'
+import { Annotation, AnnotListEntry } from '../types'
+import { STORAGE_VERSIONS } from 'src/storage/constants'
+import PageStorage from 'src/page-indexing/background/storage'
 
 // TODO: Move to src/annotations in the future
-export class AnnotationStorage extends FeatureStorage {
-    static ANNOTATIONS_COLL = 'annotations'
-    static TAGS_COLL = 'tags'
+export default class AnnotationStorage extends StorageModule {
+    static PAGES_COLL = PAGE_COLLECTION_NAMES.page
+    static ANNOTS_COLL = COLLECTION_NAMES.annotation
+    static TAGS_COLL = TAG_COLLECTION_NAMES.tag
+    static BMS_COLL = COLLECTION_NAMES.bookmark
+    static LISTS_COLL = LIST_COLLECTION_NAMES.list
+    static LIST_ENTRIES_COLL = COLLECTION_NAMES.listEntry
 
     private _browserStorageArea: Storage.StorageArea
-    private _getDb: () => Promise<Dexie>
 
-    constructor({
-        storageManager,
-        browserStorageArea = browser.storage.local,
-        getDb,
-    }: {
-        storageManager: StorageManager
-        browserStorageArea: Storage.StorageArea
-        getDb: () => Promise<Dexie>
-    }) {
-        super(storageManager)
-        this._browserStorageArea = browserStorageArea
-        this._getDb = getDb
+    private db: Storex
+    private searchIndex: SearchIndex
 
-        this.storageManager.registry.registerCollection(
-            AnnotationStorage.ANNOTATIONS_COLL,
-            {
-                version: new Date(2018, 7, 26),
+    constructor(
+        private options: {
+            storageManager: Storex
+            browserStorageArea: Storage.StorageArea
+            annotationsColl?: string
+            pageStorage: PageStorage
+            pagesColl?: string
+            tagsColl?: string
+            bookmarksColl?: string
+            listsColl?: string
+            listEntriesColl?: string
+            searchIndex: SearchIndex
+        },
+    ) {
+        super({ storageManager: options.storageManager })
+
+        this.db = options.storageManager
+        this.searchIndex = options.searchIndex
+        this._browserStorageArea = options.browserStorageArea
+    }
+
+    getConfig = (): StorageModuleConfig => ({
+        collections: {
+            ...COLLECTION_DEFINITIONS,
+            // NOTE: This is no longer used; keeping to maintain DB schema sanity
+            directLinks: {
+                version: STORAGE_VERSIONS[4].version,
                 fields: {
                     pageTitle: { type: 'text' },
                     pageUrl: { type: 'url' },
@@ -170,12 +74,158 @@ export class AnnotationStorage extends FeatureStorage {
                 indices: [
                     { field: 'url', pk: true },
                     { field: 'pageTitle' },
+                    { field: 'pageUrl' },
                     { field: 'body' },
                     { field: 'createdWhen' },
                     { field: 'comment' },
                 ],
+                history: [
+                    {
+                        version: STORAGE_VERSIONS[1].version,
+                        fields: {
+                            pageTitle: { type: 'text' },
+                            pageUrl: { type: 'url' },
+                            body: { type: 'text' },
+                            selector: { type: 'json' },
+                            createdWhen: { type: 'datetime' },
+                            url: { type: 'string' },
+                        },
+                        indices: [
+                            { field: 'url', pk: true },
+                            { field: 'pageTitle' },
+                            { field: 'body' },
+                            { field: 'createdWhen' },
+                        ],
+                    },
+                ],
             },
-        )
+        },
+        operations: {
+            findBookmarkByUrl: {
+                collection: AnnotationStorage.BMS_COLL,
+                operation: 'findObject',
+                args: { url: '$url:pk' },
+            },
+            findAnnotationByUrl: {
+                collection: AnnotationStorage.ANNOTS_COLL,
+                operation: 'findObject',
+                args: { url: '$url:pk' },
+            },
+            findListEntriesByUrl: {
+                collection: AnnotationStorage.LIST_ENTRIES_COLL,
+                operation: 'findObjects',
+                args: { url: '$url:pk' },
+            },
+            createAnnotationForList: {
+                collection: AnnotationStorage.LIST_ENTRIES_COLL,
+                operation: 'createObject',
+            },
+            createBookmark: {
+                collection: AnnotationStorage.BMS_COLL,
+                operation: 'createObject',
+            },
+            createAnnotation: {
+                collection: AnnotationStorage.ANNOTS_COLL,
+                operation: 'createObject',
+            },
+            editAnnotation: {
+                collection: AnnotationStorage.ANNOTS_COLL,
+                operation: 'updateObject',
+                args: [
+                    { url: '$url:pk' },
+                    {
+                        comment: '$comment:string',
+                        lastEdited: '$lastEdited:any',
+                    },
+                ],
+            },
+            deleteAnnotation: {
+                collection: AnnotationStorage.ANNOTS_COLL,
+                operation: 'deleteObject',
+                args: { url: '$url:pk' },
+            },
+            deleteAnnotationFromList: {
+                collection: AnnotationStorage.LIST_ENTRIES_COLL,
+                operation: 'deleteObjects',
+                args: { listId: '$listId:int', url: '$url:string' },
+            },
+            deleteListEntriesByUrl: {
+                collection: AnnotationStorage.LIST_ENTRIES_COLL,
+                operation: 'deleteObjects',
+                args: { url: '$url:string' },
+            },
+            deleteBookmarkByUrl: {
+                collection: AnnotationStorage.BMS_COLL,
+                operation: 'deleteObject',
+                args: { url: '$url:pk' },
+            },
+            deleteTagsByUrl: {
+                collection: AnnotationStorage.TAGS_COLL,
+                operation: 'deleteObjects',
+                args: { url: '$url:pk' },
+            },
+            listAnnotsByPage: {
+                operation: AnnotationsListPlugin.LIST_BY_PAGE_OP_ID,
+                args: ['$params:any'],
+            },
+        },
+    })
+
+    private async getListById({ listId }: { listId: number }) {
+        const list = await this.db
+            .collection(AnnotationStorage.LISTS_COLL)
+            .findOneObject<{ id: number }>({ id: listId })
+
+        if (list == null) {
+            throw new Error(`No list exists for ID: ${listId}`)
+        }
+
+        return list.id
+    }
+
+    async insertAnnotToList({ listId, url }: AnnotListEntry) {
+        await this.getListById({ listId })
+
+        const { object } = await this.operation('createAnnotationForList', {
+            listId,
+            url,
+            createdAt: new Date(),
+        })
+
+        return [object.listId, object.url]
+    }
+
+    async removeAnnotFromList({ listId, url }: AnnotListEntry) {
+        await this.getListById({ listId })
+
+        await this.operation('deleteAnnotationFromList', { listId, url })
+    }
+
+    /**
+     * @returns Promise resolving to a boolean denoting whether or not a bookmark was created.
+     */
+    async toggleAnnotBookmark({ url }: { url: string }) {
+        const bookmark = await this.operation('findBookmarkByUrl', { url })
+
+        if (bookmark == null) {
+            await this.operation('createBookmark', {
+                url,
+                createdAt: new Date(),
+            })
+            return true
+        }
+
+        await this.operation('deleteBookmarkByUrl', { url })
+        return false
+    }
+
+    async deleteBookmarkByUrl({ url }: { url: string }) {
+        return this.operation('deleteBookmarkByUrl', { url })
+    }
+
+    async annotHasBookmark({ url }: { url: string }) {
+        const bookmark = await this.operation('findBookmarkByUrl', { url })
+        return bookmark != null
     }
 
     private async fetchIndexingPrefs(): Promise<{ shouldIndexLinks: boolean }> {
@@ -191,54 +241,27 @@ export class AnnotationStorage extends FeatureStorage {
     async indexPageFromTab({ id, url }: Tabs.Tab) {
         const indexingPrefs = await this.fetchIndexingPrefs()
 
-        const page = await createPageFromTab({
+        const page = await this.searchIndex.createPageFromTab({
             tabId: id,
             url,
             stubOnly: !indexingPrefs.shouldIndexLinks,
         })
 
-        await page.loadRels(this._getDb)
-
-        // Add new visit if none, else page won't appear in results
-        // TODO: remove once search changes to incorporate assoc. page data apart from bookmarks/visits
-        if (!page.visits.length) {
-            page.addVisit()
-        }
-
-        await page.save(this._getDb)
+        await this.options.pageStorage.createVisitsIfNeeded(page.url, [
+            Date.now(),
+        ])
     }
 
-    async getAnnotationByPk(url: string) {
-        return this.storageManager
-            .collection(AnnotationStorage.ANNOTATIONS_COLL)
-            .findOneObject<Annotation>({ url })
+    async getAnnotationByPk(url: string): Promise<Annotation> {
+        return this.operation('findAnnotationByUrl', { url })
     }
 
-    async getAnnotationsByUrl(pageUrl: string) {
-        return this.storageManager
-            .collection(AnnotationStorage.ANNOTATIONS_COLL)
-            .findObjects<Annotation>({ pageUrl })
-    }
+    async getAllAnnotationsByUrl(params: AnnotSearchParams) {
+        const results: Annotation[] = await this.operation('listAnnotsByPage', {
+            params,
+        })
 
-    async insertDirectLink({
-        pageTitle,
-        pageUrl,
-        url,
-        body,
-        selector,
-    }: Annotation) {
-        await this.storageManager
-            .collection(AnnotationStorage.ANNOTATIONS_COLL)
-            .createObject({
-                pageTitle,
-                pageUrl,
-                body,
-                selector,
-                createdWhen: new Date(),
-                lastEdited: {},
-                url,
-                comment: '',
-            })
+        return results
     }
 
     async createAnnotation({
@@ -248,46 +271,43 @@ export class AnnotationStorage extends FeatureStorage {
         url,
         comment,
         selector,
+        createdWhen = new Date(),
     }: Annotation) {
-        return this.storageManager
-            .collection(AnnotationStorage.ANNOTATIONS_COLL)
-            .createObject({
-                pageTitle,
-                pageUrl,
-                comment,
-                body,
-                selector,
-                createdWhen: new Date(),
-                lastEdited: {},
-                url,
-            })
+        return this.operation('createAnnotation', {
+            pageTitle,
+            pageUrl,
+            comment,
+            body,
+            selector,
+            createdWhen,
+            lastEdited: createdWhen,
+            url,
+        })
     }
 
-    async editAnnotation(url: string, comment: string) {
-        return this.storageManager
-            .collection(AnnotationStorage.ANNOTATIONS_COLL)
-            .updateOneObject(
-                { url },
-                {
-                    $set: {
-                        comment,
-                        lastEdited: new Date(),
-                    },
-                },
-            )
+    async editAnnotation(
+        url: string,
+        comment: string,
+        lastEdited = new Date(),
+    ) {
+        return this.operation('editAnnotation', { url, comment, lastEdited })
     }
 
     async deleteAnnotation(url: string) {
-        return this.storageManager
-            .collection(AnnotationStorage.ANNOTATIONS_COLL)
-            .deleteOneObject({ url })
+        return this.operation('deleteAnnotation', { url })
     }
 
-    async getTagsByAnnotationUrl(url: string) {
-        return this.storageManager
+    async getTagsByAnnotationUrl(url: string): Promise<Tag[]> {
+        return this.db
             .collection(AnnotationStorage.TAGS_COLL)
-            .findObjects<Tag>({ url })
+            .findAllObjects<Tag>({ url })
     }
+
+    private deleteTags = (query: { name: string; url: string }) =>
+        this.db.collection(AnnotationStorage.TAGS_COLL).deleteObjects(query)
+
+    private createTag = tag =>
+        this.db.collection(AnnotationStorage.TAGS_COLL).createObject(tag)
 
     editAnnotationTags = async (
         tagsToBeAdded: string[],
@@ -297,37 +317,33 @@ export class AnnotationStorage extends FeatureStorage {
         // Remove the tags that are to be deleted.
         await Promise.all(
             tagsToBeDeleted.map(async tag =>
-                this.storageManager
-                    .collection(AnnotationStorage.TAGS_COLL)
-                    .deleteObjects({ name: tag, url }),
+                this.deleteTags({ name: tag, url }),
             ),
         )
 
         // Add the tags that are to be added.
         return Promise.all(
-            tagsToBeAdded.map(async tag =>
-                this.storageManager
-                    .collection(AnnotationStorage.TAGS_COLL)
-                    .createObject({ name: tag, url }),
-            ),
+            tagsToBeAdded.map(async tag => this.createTag({ name: tag, url })),
         )
     }
 
     modifyTags = (shouldAdd: boolean) => async (name: string, url: string) => {
         if (shouldAdd) {
-            this.storageManager
-                .collection(AnnotationStorage.TAGS_COLL)
-                .createObject({
-                    name,
-                    url,
-                })
+            return this.createTag({ name, url })
         } else {
-            this.storageManager
-                .collection(AnnotationStorage.TAGS_COLL)
-                .deleteObjects({
-                    name,
-                    url,
-                })
+            return this.deleteTags({ name, url })
         }
+    }
+
+    deleteTagsByUrl({ url }: { url: string }) {
+        return this.operation('deleteTagsByUrl', { url })
+    }
+
+    deleteListEntriesByUrl({ url }: { url: string }) {
+        return this.operation('deleteListEntriesByUrl', { url })
+    }
+
+    findListEntriesByUrl({ url }: { url: string }) {
+        return this.operation('findListEntriesByUrl', { url })
     }
 }

@@ -1,20 +1,83 @@
-.container {
-    margin-bottom: 50px;
+@value colors: '../../../common-ui/colors.css';
+@value color1, color 2, color6, color4 from colors;
+
+.container * {
+    font-family: 'Poppins', sans-serif;
+}
+
+.section {
+    background: #fff;
+    box-shadow: 0px 1px 10px rgba(0, 0, 0, 0.15);
+    border-radius: 5px;
+    padding: 20px 25px;
+    margin-bottom: 15px;
+}
+
+.sectionTitle {
+    font-style: normal;
+    font-weight: bold;
+    line-height: 22px;
+    color: #3a2f45;
+    font-size: 18px;
+}
+
+.subname {
+    font-size: 15px;
+    color: #544960;
+    font-weight: 300;
+    margin: 10px 0 10px 0;
+}
+
+.infoText {
+    font-size: 16px;
+    color: #544960;
+    font-weight: 300;
+    margin: 10px 0 10px 0;
+}
+
+.infoTextSmall {
+    composes: infoText;
+    font-size: 14px;
+}
+
+.whiteSpacer30 {
+    margin-top: 45px;
+}
+
+.subSubTitle {
+    font-style: normal;
+    font-weight: 500;
+    font-size: 16px;
+    line-height: 14px;
+    color: #3a2f45;
+    margin-top: 20px;
+}
+
+.block input {
+    margin-right: 10px;
+    vertical-align: middle;
+    margin-left: 10px;
+    margin-top: 0px;
+    padding: 5px 10px;
+    border-radius: 3px;
+    border: 1px solid #d2d2d2;
+    width: 100px;
+    text-align: center;
 }
 
 .header {
-    font-size: 20px;
-    color: #808080;
-    font-weight: 400;
-    letter-spacing: 1px;
-    margin: 20px 0 15px;
+    composes: sectionTitle from 'src/options/base.css';
 }
 
 .subHeader {
-    font-size: 16px;
-    font-weight: lighter;
-    color: #a9a7a7;
-    margin: -5px 0 20px;
+    composes: subText from 'src/options/base.css';
+}
+
+.buttonArea {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    align-items: center;
 }
 
 .dropdown {
@@ -24,6 +87,5 @@
 
 .subText {
     font-size: 14px;
-    font-weight: lighter;
-    color: #a9a7a7;
+    color: color6;
 }

@@ -1,4 +1,4 @@
-import React, { PureComponent, SyntheticEvent } from 'react'
+import React, { PureComponent } from 'react'
 import { connect, MapStateToProps } from 'react-redux'
 import cx from 'classnames'
 
@@ -27,13 +27,13 @@ export type Props = OwnProps & StateProps & DispatchProps
 class BookmarkButton extends PureComponent<Props> {
     render() {
         const text = this.props.isBookmarked
-            ? 'Unbookmark this Page'
+            ? 'Un-Bookmark this Page'
             : 'Bookmark this Page'
 
         return (
             <Button
                 onClick={this.props.toggleBookmark}
-                title={'Bookmark, so you can filter for it later'}
+                title={'Bookmark'}
                 btnClass={cx({
                     [styles.bookmarkedBtn]: this.props.isBookmarked,
                     [styles.unbookmarkedBtn]: !this.props.isBookmarked,
@@ -58,11 +58,7 @@ const mapDispatch: (dispatch, props: OwnProps) => DispatchProps = (
     toggleBookmark: async e => {
         e.preventDefault()
         await dispatch(acts.toggleBookmark())
-        props.closePopup()
     },
 })
 
-export default connect(
-    mapState,
-    mapDispatch,
-)(BookmarkButton)
+export default connect(mapState, mapDispatch)(BookmarkButton)

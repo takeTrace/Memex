@@ -4,12 +4,17 @@ import { connect, MapStateToProps } from 'react-redux'
 import NotificationContainer, {
     selectors as notifs,
 } from '../../../notifications'
+import { selectors as filters } from 'src/search-filters'
 import NoResultBadTerm from './NoResultBadTerm'
-import ResultsMessage from './ResultsMessage'
+import ResultsMessage from './results-message'
 import ResultList from './ResultListContainer'
-import { OnboardingChecklist } from '../../onboarding/components'
+import OnboardingMessage from './onboarding-message'
+import SearchTypeSwitch from './search-type-switch-container'
+import * as actions from '../actions'
 import * as selectors from '../selectors'
-import { RootState } from '../../../options/types'
+import { RootState } from 'src/options/types'
+import { features } from 'src/util/remote-functions-background'
+import MobileAppMessage from './mobile-app-message'
 
 const styles = require('./ResultList.css')
 
@@ -18,22 +23,60 @@ export interface StateProps {
     isBadTerm: boolean
     isLoading: boolean
     showInbox: boolean
+    isMobileListFiltered: boolean
+    areAnnotationsExpanded: boolean
+    showOnboardingMessage: boolean
     shouldShowCount: boolean
     isInvalidSearch: boolean
     showInitSearchMsg: boolean
     totalResultCount: number
 }
 
-export interface DispatchProps {}
+export interface DispatchProps {
+    toggleAreAnnotationsExpanded: (e: React.SyntheticEvent) => void
+}
 
 export interface OwnProps {}
 
 export type Props = StateProps & DispatchProps & OwnProps
 
-class ResultsContainer extends PureComponent<Props> {
+interface State {
+    showSocialSearch: boolean
+}
+
+class ResultsContainer extends React.Component<Props, State> {
+    state = {
+        showSocialSearch: false,
+    }
+
+    async componentDidMount() {
+        this.setState({
+            showSocialSearch: await features.getFeature('SocialIntegration'),
+        })
+    }
+
     private renderContent() {
-        if (this.props.showInbox) {
-            return <NotificationContainer />
+        const showOnboarding = localStorage.getItem('stage.Onboarding')
+        const showMobileAd = localStorage.getItem('stage.MobileAppAd') ?? 'true'
+
+        if (this.props.isMobileListFiltered && this.props.noResults) {
+            return (
+                <ResultsMessage>
+                    <NoResultBadTerm title="You don't have anything saved from the mobile app yet">
+                        {showMobileAd === 'true' && <MobileAppMessage />}
+                    </NoResultBadTerm>
+                </ResultsMessage>
+            )
+        }
+
+        if (showOnboarding === 'true' && this.props.noResults) {
+            return (
+                <ResultsMessage>
+                    <NoResultBadTerm title="You don't have anything saved yet">
+                        <OnboardingMessage />
+                    </NoResultBadTerm>
+                </ResultsMessage>
+            )
         }
 
         if (this.props.isBadTerm) {
@@ -73,18 +116,29 @@ class ResultsContainer extends PureComponent<Props> {
             <React.Fragment>
                 {this.props.shouldShowCount && (
                     <ResultsMessage small>
-                        Found <strong>{this.props.totalResultCount}</strong>{' '}
-                        results in your digital memory
+                        {this.props.totalResultCount} results
                     </ResultsMessage>
                 )}
                 <ResultList />
-                {!this.props.isLoading && <OnboardingChecklist isRightBox />}
             </React.Fragment>
         )
     }
 
     render() {
-        return <div className={styles.main}>{this.renderContent()}</div>
+        return (
+            <div className={styles.main}>
+                {this.props.showInbox ? (
+                    <NotificationContainer />
+                ) : (
+                    <>
+                        <SearchTypeSwitch
+                            showSocialSearch={this.state.showSocialSearch}
+                        />
+                        {this.renderContent()}
+                    </>
+                )}
+            </div>
+        )
     }
 }
 
@@ -93,15 +147,20 @@ const mapState: MapStateToProps<StateProps, OwnProps, RootState> = state => ({
     noResults: selectors.noResults(state),
     isBadTerm: selectors.isBadTerm(state),
     isLoading: selectors.isLoading(state),
+    areAnnotationsExpanded: selectors.areAnnotationsExpanded(state),
+    isMobileListFiltered: filters.isMobileListFiltered(state),
     shouldShowCount: selectors.shouldShowCount(state),
     isInvalidSearch: selectors.isInvalidSearch(state),
     totalResultCount: selectors.totalResultCount(state),
     showInitSearchMsg: selectors.showInitSearchMsg(state),
+    showOnboardingMessage: selectors.showOnboardingMessage(state),
 })
 
-const mapDispatch: (dispatch, props: OwnProps) => DispatchProps = () => ({})
+const mapDispatch: (dispatch, props: OwnProps) => DispatchProps = dispatch => ({
+    toggleAreAnnotationsExpanded: e => {
+        e.preventDefault()
+        dispatch(actions.toggleAreAnnotationsExpanded())
+    },
+})
 
-export default connect(
-    mapState,
-    mapDispatch,
-)(ResultsContainer)
+export default connect(mapState, mapDispatch)(ResultsContainer)

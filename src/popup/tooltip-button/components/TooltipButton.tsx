@@ -33,21 +33,21 @@ class InPageSwitches extends PureComponent<Props> {
 
     render() {
         return (
-            <div>
-                <span>
+            <div className={styles.switchBlocks}>
+                <div className={styles.option}>
                     <Button
                         onClick={this.props.showTooltip}
                         itemClass={styles.button}
                         btnClass={buttonStyles.highlighterIcon}
                         title={'Open Memex annotation tooltip'}
                     >
-                        Show Highlighter
+                        Enable Highlighter
                         <p className={buttonStyles.subTitle}>
                             only on this page
                         </p>
                     </Button>
-                </span>
-                <span
+                </div>
+                <div
                     className={styles.switch}
                     title={
                         'Enable/disable Memex highlighter tooltip on all pages'
@@ -57,7 +57,7 @@ class InPageSwitches extends PureComponent<Props> {
                         isChecked={this.props.isEnabled}
                         onChange={this.props.handleChange}
                     />
-                </span>
+                </div>
             </div>
         )
     }
@@ -72,7 +72,6 @@ const mapDispatch: (dispatch, props: OwnProps) => DispatchProps = (
     props,
 ) => ({
     showTooltip: async e => {
-        // console.log('dispatch')
         e.preventDefault()
         await dispatch(acts.showTooltip())
         setTimeout(props.closePopup, 200)

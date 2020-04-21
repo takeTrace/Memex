@@ -1,5 +1,11 @@
 import moment from 'moment'
 import browserIsChrome from '../../util/check-browser'
+import {
+    IMPORT_TYPE as TYPE,
+    IMPORT_SERVICES as SERVICES,
+} from 'src/options/imports/constants'
+import { loadBlob } from 'src/imports/background/utils'
+import { parsePocket, parseNetscape } from './service-parsers'
 
 export default class ImportDataSources {
     static LOOKBACK_WEEKS = 12 // Browser history is limited to the last 3 months
@@ -14,11 +20,18 @@ export default class ImportDataSources {
      *  Chrome and FF seem to ID their bookmark data differently. Root works from '' in FF
      *  but needs '0' in Chrome.
      */
-    static ROOT_BM = {
-        id: browserIsChrome() ? '0' : '',
+    get ROOT_BM() {
+        return {
+            id: browserIsChrome() ? '0' : '',
+        }
     }
 
-    constructor({ history = browser.history, bookmarks = browser.bookmarks }) {
+    constructor({
+        history = typeof browser !== 'undefined' ? browser.history : undefined,
+        bookmarks = typeof browser !== 'undefined'
+            ? browser.bookmarks
+            : undefined,
+    }) {
         this._history = history
         this._bookmarks = bookmarks
     }
@@ -57,7 +70,11 @@ export default class ImportDataSources {
      * @param {browser.BookmarkTreeNode} [dirNode] BM node representing a bookmark directory.
      * @return {AsyncIterable<BrowserItem[]>} Bookmark items in current level.
      */
-    async *bookmarks(dirNode = ImportDataSources.ROOT_BM) {
+    async *bookmarks(dirNode = null) {
+        if (!dirNode) {
+            dirNode = this.ROOT_BM
+        }
+
         // Folders don't contain `url`; recurse!
         const children = await this._bookmarks.getChildren(dirNode.id)
 
@@ -80,5 +97,39 @@ export default class ImportDataSources {
         for (const dir of childGroups.dirs) {
             yield* this.bookmarks(dir)
         }
+    }
+
+    /**
+     * Parses file contents and returns import items
+     * @param {string} url Blob URL
+     * @param {object} allowTypes
+     * @return {Item[]} Parsed Items
+     */
+    async parseFile(url, allowTypes) {
+        let contents
+        let items = []
+
+        if (!allowTypes || !url) {
+            return items
+        }
+
+        if (
+            allowTypes[TYPE.OTHERS] === SERVICES.POCKET ||
+            allowTypes[TYPE.OTHERS] === SERVICES.NETSCAPE
+        ) {
+            contents = await loadBlob({
+                url,
+                timeout: 10000,
+                responseType: 'document',
+            })
+        }
+
+        if (allowTypes[TYPE.OTHERS] === SERVICES.POCKET) {
+            items = parsePocket(contents)
+        } else if (allowTypes[TYPE.OTHERS] === SERVICES.NETSCAPE) {
+            items = parseNetscape(contents)
+        }
+
+        return items
     }
 }

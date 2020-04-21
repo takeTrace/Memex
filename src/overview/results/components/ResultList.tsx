@@ -1,11 +1,12 @@
 import React, { ReactChild, PureComponent } from 'react'
 import cx from 'classnames'
+import OnboardingMessage from './onboarding-message'
 
 const styles = require('./ResultList.css')
-const shortcut = 'img/shortcut.svg'
 
 export interface Props {
     scrollDisabled?: boolean
+    isFilterBarActive?: boolean
     children: ReactChild[] | ReactChild
 }
 
@@ -14,38 +15,27 @@ class ResultList extends PureComponent<Props> {
         scrollDisabled: false,
     }
 
-    get listHeightStyles() {
-        if (!this.props.scrollDisabled) {
-            return {}
-        }
-
-        // Calculate height of the list to prevent scrolling
-        // Height = 90vh + amount of height scrolled
-        return {
-            height: 0.9 * window.innerHeight + window.pageYOffset + 20,
-        }
-    }
-
     get mainClass() {
-        return cx(styles.root, { [styles.noScroll]: this.props.scrollDisabled })
+        return cx(styles.root, {
+            [styles.lessHeight]: this.props.isFilterBarActive,
+        })
     }
 
     render() {
+
+        const showOnboarding = localStorage.getItem('stage.Onboarding')
         return (
-            <div>
-                <ul className={this.mainClass} style={this.listHeightStyles}>
-                    {this.props.children}
-                    <p className={styles.infoBox}>
-                        <span className={styles.emoji}>🤓</span>
-                        <span>
-                            <b>Pro Tip: </b>
-                            Search by typing
-                        </span>
-                        <img className={styles.shortcut} src={shortcut} />
-                        <span>into the address bar</span>
-                    </p>
-                </ul>
-            </div>
+            <ul
+                className={cx(this.mainClass, {
+                    [styles.filterBarActive]: this.props.isFilterBarActive,
+                })}
+            >    
+            {showOnboarding === 'true' && (
+                <OnboardingMessage />
+            )}
+                {this.props.children}
+                <div className={styles.infoBox} />
+            </ul>
         )
     }
 }

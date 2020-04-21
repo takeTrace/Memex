@@ -2,21 +2,14 @@ import React from 'react'
 import PropTypes from 'prop-types'
 
 import IndexDropdownRow from './IndexDropdownRow'
-import localStyles from './IndexDropdown.css'
 
-const IndexDropdownNewRow = ({ value, ...props }) => (
-    <IndexDropdownRow
-        {...props}
-        value={
-            <React.Fragment>
-                <span className={localStyles.bold}>add new: </span> {value}
-            </React.Fragment>
-        }
-    />
+const IndexDropdownNewRow = ({ value, isNew = true, ...props }) => (
+    <IndexDropdownRow {...props} value={<span>{value}</span>} isNew />
 )
 
 IndexDropdownNewRow.propTypes = {
     value: PropTypes.string.isRequired,
+    isNew: PropTypes.bool,
 }
 
 export default IndexDropdownNewRow

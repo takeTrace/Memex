@@ -3,6 +3,7 @@ import PropTypes from 'prop-types'
 import { connect } from 'react-redux'
 import { bindActionCreators } from 'redux'
 
+import ButtonTooltip from '../../common-ui/components/button-tooltip'
 import * as selectors from './selectors'
 import * as actions from './actions'
 import * as constants from './constants'
@@ -15,8 +16,10 @@ import ButtonBar from './components/ButtonBar'
 import DownloadDetails from './components/DownloadDetails'
 import DownloadDetailsRow from './components/DownloadDetailsRow'
 import StatusReport from './components/StatusReport'
-import AdvSettingCheckbox from './components/AdvSettingsCheckbox'
 // import ShowDownloadDetails from './components/ShowDownloadDetails'
+import { acts as searchBarActs } from 'src/overview/search-bar'
+import styles from './components/ActionButton.css'
+import { OPTIONS_URL } from 'src/constants'
 
 class ImportContainer extends Component {
     static propTypes = {
@@ -32,9 +35,11 @@ class ImportContainer extends Component {
         showDownloadDetails: PropTypes.bool.isRequired,
         downloadDataFilter: PropTypes.string.isRequired,
         recalcEsts: PropTypes.func.isRequired,
-
+        allowTypes: PropTypes.object.isRequired,
+        blobUrl: PropTypes.string,
         // Misc
         boundActions: PropTypes.object.isRequired,
+        search: PropTypes.func.isRequired,
     }
 
     constructor(props) {
@@ -56,6 +61,7 @@ class ImportContainer extends Component {
         } else if (!this.props.isPaused) {
             this.props.boundActions.prepareImport()
         }
+        this.props.search()
     }
 
     setCancelState = waitingOnCancelConfirm =>
@@ -89,8 +95,21 @@ class ImportContainer extends Component {
     handleEstTableCheck = type => () =>
         this.props.boundActions.toggleAllowType(type)
 
+    setAllowType = type => () => this.props.boundActions.setAllowType(type)
+
     renderHelpText = () =>
         this.state.waitingOnCancelConfirm ? 'Press cancel again to confirm' : ''
+
+    handleInputFile = event => {
+        const input = event.target
+        if (!input.files[0]) {
+            return
+        }
+        const file = input.files[0]
+        this.props.boundActions.prepareImport()
+        this.props.boundActions.setBlobUrl(URL.createObjectURL(file))
+        setTimeout(() => this.props.recalcEsts(), 500)
+    }
 
     renderCancelButton = () => (
         <ActionButton
@@ -98,12 +117,25 @@ class ImportContainer extends Component {
             isHidden={!this.props.shouldRenderProgress}
             customClass={'cancel'}
         >
-            Cancel
+            {this.state.waitingOnCancelConfirm ? 'Confirm Cancel' : 'Cancel'}
         </ActionButton>
     )
 
     renderImportButton() {
-        const { boundActions } = this.props
+        const {
+            boundActions,
+            blobUrl,
+            allowTypes,
+            isStartBtnDisabled,
+        } = this.props
+
+        const isDisabled =
+            allowTypes[constants.IMPORT_TYPE.OTHERS] ===
+                constants.IMPORT_SERVICES.POCKET ||
+            allowTypes[constants.IMPORT_TYPE.OTHERS] ===
+                constants.IMPORT_SERVICES.NETSCAPE
+                ? !blobUrl
+                : isStartBtnDisabled
 
         if (this.props.isRunning) {
             return (
@@ -129,12 +161,22 @@ class ImportContainer extends Component {
 
         if (this.props.isStopped) {
             return (
-                <ActionButton
-                    customClass={'newImport'}
-                    handleClick={this.handleBtnClick(boundActions.finish)}
-                >
-                    Start new import
-                </ActionButton>
+                <div className={styles.finishBntContainer}>
+                    <ActionButton
+                        customClass={'newImport'}
+                        handleClick={this.handleBtnClick(boundActions.finish)}
+                    >
+                        Start new import
+                    </ActionButton>
+                    <ActionButton
+                        customClass={'dashboard'}
+                        handleClick={() =>
+                            window.open(`${OPTIONS_URL}#/overview`)
+                        }
+                    >
+                        Go to dashboard
+                    </ActionButton>
+                </div>
             )
         }
 
@@ -142,7 +184,7 @@ class ImportContainer extends Component {
         return (
             <ActionButton
                 handleClick={this.handleBtnClick(boundActions.start)}
-                isDisabled={this.props.isStartBtnDisabled}
+                isDisabled={isDisabled}
                 customClass={'startImport'}
                 type="submit"
             >
@@ -170,6 +212,13 @@ class ImportContainer extends Component {
             onAllowHistoryClick={this.handleEstTableCheck(
                 constants.IMPORT_TYPE.HISTORY,
             )}
+            onAllowPocketClick={this.setAllowType(
+                constants.IMPORT_SERVICES.POCKET,
+            )}
+            onAllowHTMLClick={this.setAllowType(
+                constants.IMPORT_SERVICES.NETSCAPE,
+            )}
+            onInputImport={this.handleInputFile}
         />
     )
 
@@ -267,13 +316,17 @@ class ImportContainer extends Component {
         <ButtonBar helpText={this.renderHelpText()} {...this.props}>
             {this.props.shouldRenderEsts && (
                 <React.Fragment>
-                    <AdvSettingCheckbox {...this.props} />
-                    <ActionButton
-                        handleClick={this.props.recalcEsts}
-                        customClass="recalc"
+                    <ButtonTooltip
+                        tooltipText="Recalculate Numbers"
+                        position="bottom"
                     >
-                        <i className="material-icons">autorenew</i>
-                    </ActionButton>
+                        <ActionButton
+                            handleClick={this.props.recalcEsts}
+                            customClass="recalc"
+                        >
+                            <span className={styles.reCalc} />
+                        </ActionButton>
+                    </ButtonTooltip>
                 </React.Fragment>
             )}
             {this.renderCancelButton()}
@@ -307,7 +360,7 @@ const mapStateToProps = state => ({
     failCount: selectors.failCount(state),
     allowTypes: selectors.allowTypes(state),
     loadingMsg: selectors.loadingMsg(state),
-    advMode: selectors.advMode(state),
+    blobUrl: selectors.blobUrl(state),
     showDownloadDetails: selectors.showDownloadDetails(state),
     downloadDataFilter: selectors.downloadDataFilter(state),
 })
@@ -315,10 +368,7 @@ const mapStateToProps = state => ({
 const mapDispatchToProps = dispatch => ({
     boundActions: bindActionCreators(actions, dispatch),
     recalcEsts: () => dispatch(actions.recalcEsts()),
-    toggleAdvMode: () => dispatch(actions.toggleAdvMode()),
+    search: () => dispatch(searchBarActs.search({ overwrite: true })),
 })
 
-export default connect(
-    mapStateToProps,
-    mapDispatchToProps,
-)(ImportContainer)
+export default connect(mapStateToProps, mapDispatchToProps)(ImportContainer)

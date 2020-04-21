@@ -1,15 +1,18 @@
 import retargetEvents from 'react-shadow-dom-retarget-events'
 import { browser } from 'webextension-polyfill-ts'
 
-import { makeRemotelyCallable } from 'src/util/webextensionRPC'
+import {
+    makeRemotelyCallable,
+    makeRemotelyCallableType,
+} from 'src/util/webextensionRPC'
 import { setupRibbonAndSidebarUI, destroyRibbonAndSidebarUI } from '..'
 import { getSidebarState } from '../utils'
 import { getTooltipState } from 'src/content-tooltip/utils'
 import { createRootElement, destroyRootElement } from './rendering'
-import { removeHighlights } from './highlight-interactions'
-import AnnotationsManager from 'src/sidebar-common/annotations-manager'
+import AnnotationsManager from 'src/annotations/annotations-manager'
 import ToolbarNotifications from 'src/toolbar-notification/content_script'
 import { insertTooltip, removeTooltip } from 'src/content-tooltip/interactions'
+import { RibbonInteractionsInterface } from 'src/sidebar-overlay/ribbon/types'
 
 let target = null /* Target container for the Ribbon. */
 let shadowRoot = null /* Root of the shadow DOM in which ribbon is inserted. */
@@ -33,13 +36,21 @@ let manualOverride = false
 export const insertRibbon = async ({
     annotationsManager,
     toolbarNotifications,
+    forceExpandRibbon = false,
+    store,
+    ...args
 }: {
     annotationsManager: AnnotationsManager
     toolbarNotifications: ToolbarNotifications
+    forceExpandRibbon?: boolean
+    store: any
 }) => {
     // If target is set, Ribbon has already been injected.
     if (target) {
-        await updateRibbon()
+        await updateRibbon({
+            openRibbon: forceExpandRibbon,
+            ...args,
+        })
         return
     }
 
@@ -63,12 +74,15 @@ export const insertRibbon = async ({
             if (isTooltipEnabled) {
                 removeTooltip()
             } else {
-                await insertTooltip({ toolbarNotifications })
+                await insertTooltip({ toolbarNotifications, store })
             }
         },
         setRibbonSidebarRef: ref => {
             ribbonSidebarRef = ref
         },
+        forceExpandRibbon,
+        store,
+        ...args,
     })
 }
 
@@ -78,7 +92,7 @@ const _removeRibbonViaRibbonCross = async ({
     toolbarNotifications: ToolbarNotifications
 }) => {
     manualOverride = true
-    _removeRibbon()
+    removeRibbon()
 
     const closeMessageShown = await _getCloseMessageShown()
     if (!closeMessageShown) {
@@ -91,11 +105,10 @@ const _removeRibbonViaRibbonCross = async ({
  * Removes the ribbon and sidebar from the DOM (if it is present) after
  * removing the highlights from the page. Also destroys the container.
  */
-const _removeRibbon = () => {
+export const removeRibbon = () => {
     if (!target) {
         return
     }
-    removeHighlights()
     destroyRibbonAndSidebarUI(target, shadowRoot)
     destroyRootElement()
     shadowRoot = null
@@ -111,9 +124,11 @@ const _removeRibbon = () => {
 const _insertOrRemoveRibbon = async ({
     annotationsManager,
     toolbarNotifications,
+    store,
 }: {
     annotationsManager: AnnotationsManager
     toolbarNotifications: ToolbarNotifications
+    store: any
 }) => {
     if (manualOverride) {
         return
@@ -123,9 +138,9 @@ const _insertOrRemoveRibbon = async ({
     const isRibbonPresent = !!target
 
     if (isRibbonEnabled && !isRibbonPresent) {
-        insertRibbon({ annotationsManager, toolbarNotifications })
+        insertRibbon({ annotationsManager, toolbarNotifications, store })
     } else if (!isRibbonEnabled && isRibbonPresent) {
-        _removeRibbon()
+        removeRibbon()
     }
 }
 
@@ -134,7 +149,14 @@ const _insertOrRemoveRibbon = async ({
  * Fetches whether the sidebar and tooltip are enabled.
  * Tells the ribbon to update its state with those values.
  */
-const updateRibbon = async () => {
+const updateRibbon = async (
+    args: {
+        openRibbon?: boolean
+        openToCollections?: boolean
+        openToComment?: boolean
+        openToTags?: boolean
+    } = {},
+) => {
     if (!target) {
         return
     }
@@ -144,9 +166,11 @@ const updateRibbon = async () => {
     const isTooltipEnabled = await getTooltipState()
 
     if (ribbonSidebarRef && ribbonSidebarRef.getWrappedInstance()) {
-        ribbonSidebarRef
-            .getWrappedInstance()
-            .updateRibbonState({ isRibbonEnabled, isTooltipEnabled })
+        ribbonSidebarRef.getWrappedInstance().updateRibbonState({
+            isRibbonEnabled,
+            isTooltipEnabled,
+            ...args,
+        })
     }
 }
 
@@ -156,24 +180,31 @@ const updateRibbon = async () => {
 export const setupRPC = ({
     annotationsManager,
     toolbarNotifications,
+    store,
 }: {
     annotationsManager: AnnotationsManager
     toolbarNotifications: ToolbarNotifications
+    store: any
 }) => {
-    makeRemotelyCallable({
+    makeRemotelyCallableType<RibbonInteractionsInterface>({
         /**
          * Used for inserting the ribbon.
          */
-        insertRibbon: ({ override } = { override: false }) => {
+        insertRibbon: ({ override, ...args } = { override: false }) => {
             manualOverride = !!override
-            insertRibbon({ annotationsManager, toolbarNotifications })
+            insertRibbon({
+                annotationsManager,
+                toolbarNotifications,
+                store,
+                ...args,
+            })
         },
         /**
          * Used for removing the ribbon.
          */
         removeRibbon: ({ override } = { override: false }) => {
             manualOverride = !!override
-            _removeRibbon()
+            removeRibbon()
         },
         /**
          * Inserts or removes the ribbon from the page depending on whether it
@@ -183,6 +214,7 @@ export const setupRPC = ({
             await _insertOrRemoveRibbon({
                 annotationsManager,
                 toolbarNotifications,
+                store,
             })
         },
         /**

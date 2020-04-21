@@ -2,7 +2,8 @@ import { createReducer } from 'redux-act'
 
 import * as acts from './actions'
 import { SearchResult, Result } from '../types'
-import { isInvalidSearch } from './selectors'
+import { PageUrlsByDay } from 'src/search/background/types'
+import analytics from 'src/analytics'
 
 export interface State {
     /** Holds the current search results used to render to the UI. */
@@ -15,14 +16,26 @@ export interface State {
     isBadTerm: boolean
     /** Denotes whether or not the current search only had invalid filters. */
     isInvalidSearch: boolean
+    /** Denotes whether or not to show post-onboarding message. */
+    showOnboardingMessage: boolean
     /** Holds the index of the result where the tags popup should be displayed (-1 by default). */
     activeTagIndex: number
+    /** Holds the index of the result which has the sidebar open (-1 by default) */
+    activeSidebarIndex: number
     /** Holds the current page of results that the user has scrolled to (0-based). */
     currentPage: number
     /** Holds the total count of matching results to the current search (includes not-shown results). */
     totalCount: number
     /** Holds the number of searches performed. */
     searchCount: number
+    /** Denotes whether annotation lists are expanded by default */
+    areAnnotationsExpanded: boolean
+    /** Denotes whether the returned results are of the clustered annotations form */
+    isAnnotsSearch: boolean
+    /** Holds the clustered annots object */
+    annotsByDay: PageUrlsByDay
+    /** Denotes the type of search performed */
+    searchType: 'notes' | 'page' | 'social'
 }
 
 const defState: State = {
@@ -32,30 +45,59 @@ const defState: State = {
     isBadTerm: false,
     isInvalidSearch: false,
     activeTagIndex: -1,
+    activeSidebarIndex: -1,
     currentPage: 0,
     totalCount: null,
     searchCount: 0,
+    areAnnotationsExpanded: false,
+    showOnboardingMessage: false,
+    isAnnotsSearch: false,
+    annotsByDay: null,
+    searchType: 'page',
 }
 
 const handleSearchResult = (overwrite: boolean) => (
     state: State,
     payload: SearchResult,
 ): State => {
-    const results = overwrite
-        ? payload.docs
-        : [...state.results, ...payload.docs]
-
-    return {
-        ...state,
+    const commonState = {
         resultsExhausted: payload.resultsExhausted,
         totalCount: payload.totalCount,
         isBadTerm: payload.isBadTerm,
         isInvalidSearch: payload.isInvalidSearch,
+        isAnnotsSearch: payload.isAnnotsSearch,
+    }
+
+    if (state.searchType === 'social' && payload.docs.every(doc => !doc.user)) {
+        return {
+            ...state,
+            ...commonState,
+        }
+    }
+
+    const results = overwrite
+        ? payload.docs
+        : [...state.results, ...payload.docs]
+
+    const annotsByDay =
+        payload.annotsByDay && overwrite
+            ? payload.annotsByDay
+            : { ...state.annotsByDay, ...payload.annotsByDay }
+
+    return {
+        ...state,
+        ...commonState,
         results,
+        annotsByDay,
     }
 }
 
 const reducer = createReducer<State>({}, defState)
+
+reducer.on(acts.setShowOnboardingMessage, (state, showOnboardingMessage) => ({
+    ...state,
+    showOnboardingMessage,
+}))
 
 reducer.on(acts.addTag, (state, { tag, index }) => {
     const doc = state.results[index]
@@ -74,6 +116,8 @@ reducer.on(acts.addTag, (state, { tag, index }) => {
 })
 
 reducer.on(acts.delTag, (state, { tag, index }) => {
+    analytics.trackEvent({ category: 'Tag', action: 'fromResults' })
+
     const doc = state.results[index]
     const removalIndex = doc.tags.findIndex(val => val === tag)
 
@@ -139,6 +183,26 @@ reducer.on(acts.setActiveTagIndex, (state, payload) => ({
     activeTagIndex: payload,
 }))
 
+reducer.on(acts.resetActiveSidebarIndex, state => ({
+    ...state,
+    activeSidebarIndex: defState.activeSidebarIndex,
+}))
+
+reducer.on(acts.setActiveSidebarIndex, (state, payload) => ({
+    ...state,
+    activeSidebarIndex: payload,
+}))
+
+reducer.on(acts.setAreAnnotationsExpanded, (state, payload) => ({
+    ...state,
+    areAnnotationsExpanded: payload,
+}))
+
+reducer.on(acts.toggleAreAnnotationsExpanded, state => ({
+    ...state,
+    areAnnotationsExpanded: !state.areAnnotationsExpanded,
+}))
+
 reducer.on(acts.nextPage, state => ({
     ...state,
     currentPage: state.currentPage + 1,
@@ -163,6 +227,20 @@ reducer.on(acts.setLoading, (state, payload) => ({
     isLoading: payload,
 }))
 reducer.on(acts.appendSearchResult, handleSearchResult(false))
+reducer.on(acts.resetSearchResult, state => ({
+    ...state,
+    resultsExhausted: defState.resultsExhausted,
+    totalCount: defState.totalCount,
+    isBadTerm: defState.isBadTerm,
+    isInvalidSearch: defState.isInvalidSearch,
+    isAnnotsSearch: defState.isAnnotsSearch,
+    results: defState.results,
+    annotsByDay: defState.annotsByDay,
+}))
 reducer.on(acts.setSearchResult, handleSearchResult(true))
+reducer.on(acts.setSearchType, (state, searchType) => ({
+    ...state,
+    searchType,
+}))
 
 export default reducer

@@ -24,14 +24,34 @@
         "member-access": false,
         "member-ordering": false,
         "no-arg": true,
-        "no-console": [true, "debug", "info", "trace"],
+        "no-console": [true, "debug", "info", "trace", "log"],
         "no-construct": true,
         "no-debugger": true,
         "no-duplicate-variable": true,
         "no-empty": false,
         "no-empty-interface": false,
         "no-eval": true,
-        "no-implicit-dependencies": false,
+        "no-implicit-dependencies": [
+            true,
+            "dev",
+            [
+                "user-logic",
+                "simple-signalling",
+                "@worldbrain/storex",
+                "@worldbrain/storex-sync",
+                "@worldbrain/storex-backend-dexie",
+                "@worldbrain/storex-backend-firestore",
+                "@worldbrain/storex-backend-typeorm",
+                "@worldbrain/storex-pattern-modules",
+                "@worldbrain/storex-middleware-change-watcher",
+                "@worldbrain/storex-hub",
+                "@worldbrain/memex-url-utils",
+                "@worldbrain/memex-stemmer",
+                "@worldbrain/memex-storage",
+                "@worldbrain/memex-common",
+                "src"
+            ]
+        ],
         "no-object-literal-type-assertion": false,
         "no-shadowed-variable": true,
         "no-string-literal": false,
@@ -62,7 +82,9 @@
             true,
             "ban-keywords",
             "check-format",
-            "allow-leading-underscore"
-        ]
+            "allow-leading-underscore",
+            "allow-pascal-case"
+        ],
+        "semicolon": false
     }
 }

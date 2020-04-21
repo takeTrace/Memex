@@ -14,12 +14,11 @@ type ForEachChunkCb = (
 ) => Promise<void>
 
 jest.mock('src/blacklist/background/interface')
-jest.mock('src/util/encode-url-for-id')
 jest.mock('src/activity-logger')
 jest.mock('./cache')
 jest.mock('./data-sources')
 
-const runSuite = (DATA: TestData) => async () => {
+const runSuite = (DATA: TestData) => () => {
     let state
 
     beforeAll(() => {
@@ -36,7 +35,7 @@ const runSuite = (DATA: TestData) => async () => {
                 bmKeys: new Set(),
             }),
         })
-        state = new State({ itemCreator })
+        state = new State({ itemCreator, storageManager: {} as any })
     })
 
     // Clear and force re-calc for each test
@@ -59,10 +58,13 @@ const runSuite = (DATA: TestData) => async () => {
                 bmKeys: new Set(),
             }),
         })
-        const localState = new State({ itemCreator }) as any
+        const localState = new State({
+            itemCreator,
+            storageManager: {} as any,
+        }) as any
         await localState.fetchEsts()
 
-        expect(localState.counts.completed).toEqual({ h: 0, b: 0 })
+        expect(localState.counts.completed).toEqual({ h: 0, b: 0, o: 0 })
         expect(localState.counts.remaining).toEqual({
             // The actual counts should only be length of 1x test history (input is 2x)
             h: DATA.history.length,
@@ -95,7 +97,7 @@ const runSuite = (DATA: TestData) => async () => {
         const counts = await state.fetchEsts()
 
         // Check the returned counts
-        expect(counts.completed).toEqual({ h: 0, b: 0 })
+        expect(counts.completed).toEqual({ h: 0, b: 0, o: 0 })
         expect(counts.remaining).toEqual({
             h: diff(DATA.histUrls, DATA.bmUrls).length,
             b: DATA.bmUrls.length,
@@ -179,7 +181,7 @@ const runSuite = (DATA: TestData) => async () => {
 
     test('import items can be removed/marked-off', async () => {
         // These will change as items get marked off
-        let expectedCompleted = { h: 0, b: 0 }
+        let expectedCompleted = { h: 0, b: 0, o: 0 }
         let expectedRemaining = {
             h: diff(DATA.histUrls, DATA.bmUrls).length,
             b: DATA.bmUrls.length,
@@ -201,7 +203,7 @@ const runSuite = (DATA: TestData) => async () => {
     test('import items can be flagged as errors', async () => {
         const flaggedUrls = []
         // Remaining will change as items get marked as errors; completed won't
-        const expectedCompleted = { h: 0, b: 0 }
+        const expectedCompleted = { h: 0, b: 0, o: 0 }
         let expectedRemaining = {
             h: diff(DATA.histUrls, DATA.bmUrls).length,
             b: DATA.bmUrls.length,

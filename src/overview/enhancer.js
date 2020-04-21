@@ -8,6 +8,15 @@ import * as constants from './constants'
 import { selectors as filters, actions as filterActs } from '../search-filters'
 import { selectors as searchBar, acts as searchBarActs } from './search-bar'
 import { selectors as results, acts as resultsActs } from './results'
+import {
+    selectors as sidebarLeft,
+    actions as sidebarLeftActs,
+} from './sidebar-left'
+import {
+    constants as optConsts,
+    actions as optActs,
+    defaultState as defOptState,
+} from 'src/options/settings'
 
 const parseBool = str => str === 'true'
 const parseNumber = str => Number(str)
@@ -35,9 +44,21 @@ const locationSync = ReduxQuerySync.enhancer({
             stringToValue: parseBool,
             defaultValue: false,
         },
-        tags: {
+        isMobileListFiltered: {
+            selector: filters.isMobileListFiltered,
+            action: filterActs.setMobileListFiltered,
+            valueToString: parseBool,
+            defaultValue: false,
+        },
+        tagsInc: {
             selector: filters.tags,
             action: filterActs.setTagFilters,
+            valueToString: stringifyArr,
+            defaultValue: [],
+        },
+        tagsExc: {
+            selector: filters.tagsExc,
+            action: filterActs.setExcTagFilters,
             valueToString: stringifyArr,
             defaultValue: [],
         },
@@ -50,6 +71,18 @@ const locationSync = ReduxQuerySync.enhancer({
         domainsExc: {
             selector: filters.domainsExc,
             action: filterActs.setExcDomainFilters,
+            valueToString: stringifyArr,
+            defaultValue: [],
+        },
+        hashtagsInc: {
+            selector: filters.hashtagsInc,
+            action: filterActs.setIncHashtagFilters,
+            valueToString: stringifyArr,
+            defaultValue: [],
+        },
+        hashtagsExc: {
+            selector: filters.hashtagsExc,
+            action: filterActs.setExcHashtagFilters,
             valueToString: stringifyArr,
             defaultValue: [],
         },
@@ -69,21 +102,54 @@ const locationSync = ReduxQuerySync.enhancer({
             stringToValue: parseBool,
             defaultValue: false,
         },
+        notes: {
+            selector: filters.notesFilter,
+            action: filterActs.toggleNotesFilter,
+            stringToValue: parseBool,
+            defaultValue: true,
+        },
+        highlights: {
+            selector: filters.highlightsFilter,
+            action: filterActs.toggleHighlightsFilter,
+            stringToValue: parseBool,
+            defaultValue: true,
+        },
+        websites: {
+            selector: filters.websitesFilter,
+            action: filterActs.toggleWebsitesFilter,
+            stringToValue: parseBool,
+            defaultValue: true,
+        },
     },
 })
 
 const hydrateStateFromStorage = store => {
-    const hydrate = (key, action) =>
+    const hydrate = (key, action, defaultValue) =>
         browser.storage.local.get(key).then(data => {
-            if (data[key] == null) {
+            if (data[key] == null && defaultValue == null) {
                 return
             }
 
-            store.dispatch(action(data[key]))
+            const value = data[key] == null ? defaultValue : data[key]
+            store.dispatch(action(value))
         })
 
     // Keep each of these storage keys in sync
     hydrate(constants.SEARCH_COUNT_KEY, resultsActs.initSearchCount)
+    hydrate(
+        constants.ANNOTATIONS_EXPANDED_KEY,
+        resultsActs.setAreAnnotationsExpanded,
+    )
+    hydrate(
+        constants.SIDEBAR_LOCKED_KEY,
+        sidebarLeftActs.setSidebarLocked,
+        true,
+    )
+    hydrate(
+        optConsts.STORAGE_KEYS.SCREENSHOTS,
+        optActs.initScreenshots,
+        defOptState.screenshots,
+    )
 }
 
 const syncStateToStorage = store =>
@@ -93,6 +159,11 @@ const syncStateToStorage = store =>
         const state = store.getState()
 
         dump(constants.SEARCH_COUNT_KEY, results.searchCount(state))
+        dump(
+            constants.ANNOTATIONS_EXPANDED_KEY,
+            results.areAnnotationsExpanded(state),
+        )
+        dump(constants.SIDEBAR_LOCKED_KEY, sidebarLeft.sidebarLocked(state))
     })
 
 const storageSync = storeCreator => (reducer, initState, enhancer) => {
@@ -107,9 +178,6 @@ const storageSync = storeCreator => (reducer, initState, enhancer) => {
     return store
 }
 
-const enhancer = compose(
-    locationSync,
-    storageSync,
-)
+const enhancer = compose(locationSync, storageSync)
 
 export default enhancer

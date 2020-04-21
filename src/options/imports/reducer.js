@@ -12,6 +12,7 @@ import {
 const defaultStats = {
     [TYPE.HISTORY]: 0,
     [TYPE.BOOKMARK]: 0,
+    [TYPE.OTHERS]: 0,
 }
 
 const defaultState = {
@@ -22,16 +23,19 @@ const defaultState = {
     success: defaultStats, // Success counts for completed import items
     totals: defaultStats, // Static state to use to derive remaining counts from
     importStatus: STATUS.LOADING,
-    loadingMsg:
-        'Analysing your browsing history & bookmarks for importing. This can take a few moments.',
+    loadingMsg: 'Calculating size of history & bookmarks',
     downloadDataFilter: FILTERS.ALL,
     concurrency: DEF_CONCURRENCY,
     isAdvEnabled: false,
     allowTypes: {
         [TYPE.HISTORY]: false,
         [TYPE.BOOKMARK]: false,
+        [TYPE.OTHERS]: '',
     },
     showDownloadDetails: false,
+    blobUrl: null,
+    bookmarkImports: false,
+    indexTitle: false,
 }
 
 /**
@@ -71,24 +75,37 @@ const toggleAllowTypeReducer = (state, type) => ({
     },
 })
 
-const finishImportsReducer = ({ loading = false }) => state => ({
+const setAllowTypeReducer = (state, value) => ({
     ...state,
+    allowTypes: {
+        ...state.allowTypes,
+        [TYPE.OTHERS]: state.allowTypes[TYPE.OTHERS].length === 0 ? value : '',
+    },
+})
+
+const finishImportsReducer = ({ loading = false, finish = true }) => state => ({
+    ...state,
+    allowTypes: finish ? defaultState.allowTypes : state.allowTypes,
     importStatus: loading ? STATUS.LOADING : STATUS.IDLE,
+    blobUrl: finish ? null : state.blobUrl,
     downloadData: [],
     success: defaultStats,
     fail: defaultStats,
 })
 
-const prepareImportReducer = state => ({
-    ...state,
-    importStatus: STATUS.LOADING,
-    loadingMsg: 'Recalculating Download Size.',
-})
+const prepareImportReducer = state => {
+    return {
+        ...state,
+        importStatus: STATUS.LOADING,
+        loadingMsg: 'Calculating size of history & bookmarks',
+    }
+}
 
 const cancelImportReducer = state => ({
     ...state,
     importStatus: STATUS.LOADING,
-    loadingMsg: 'Please wait as import progress gets recorded.',
+    blobUrl: null,
+    loadingMsg: 'Import progress gets saved',
 })
 
 const initEstimateCounts = (state, { remaining, completed }) => ({
@@ -111,12 +128,16 @@ export default createReducer(
         [actions.startImport]: setImportState(STATUS.RUNNING),
         [actions.stopImport]: setImportState(STATUS.STOPPED),
         [actions.finishImport]: finishImportsReducer({ loading: true }),
-        [actions.readyImport]: finishImportsReducer({ loading: false }),
+        [actions.readyImport]: finishImportsReducer({
+            loading: false,
+            finish: false,
+        }),
         [actions.cancelImport]: cancelImportReducer,
         [actions.pauseImport]: setImportState(STATUS.PAUSED),
         [actions.resumeImport]: setImportState(STATUS.RUNNING),
         [actions.addImportItem]: addDownloadDetailsReducer,
         [actions.toggleAllowType]: toggleAllowTypeReducer,
+        [actions.setAllowType]: setAllowTypeReducer,
         [actions.filterDownloadDetails]: payloadReducer('downloadDataFilter'),
         [actions.initImportState]: payloadReducer('importStatus'),
         [actions.initEstimateCounts]: initEstimateCounts,
@@ -135,15 +156,14 @@ export default createReducer(
                 [TYPE.HISTORY]:
                     allowTypes[TYPE.HISTORY] ||
                     defaultState.allowTypes[TYPE.HISTORY],
+                [TYPE.OTHERS]:
+                    allowTypes[TYPE.OTHERS] ||
+                    defaultState.allowTypes[TYPE.OTHERS],
             },
         }),
         [actions.setConcurrency]: (state, concurrency) => ({
             ...state,
             concurrency,
-        }),
-        [actions.toggleAdvMode]: state => ({
-            ...state,
-            isAdvEnabled: !state.isAdvEnabled,
         }),
         [actions.showDownloadDetails]: state => ({
             ...state,
@@ -153,7 +173,19 @@ export default createReducer(
             ...state,
             processErrors,
             importStatus: STATUS.LOADING,
-            loadingMsg: 'Preparing import.',
+            loadingMsg: 'Preparing Import.',
+        }),
+        [actions.setBlobUrl]: (state, blobUrl) => ({
+            ...state,
+            blobUrl,
+        }),
+        [actions.toggleBookmarkImports]: state => ({
+            ...state,
+            bookmarkImports: !state.bookmarkImports,
+        }),
+        [actions.toggleIndexTitle]: state => ({
+            ...state,
+            indexTitle: !state.indexTitle,
         }),
     },
     defaultState,

@@ -1,8 +1,7 @@
-import Storex, { StorageCollection, FindManyOptions } from 'storex'
-import DexieOrig from 'dexie'
-import { FilterQuery } from 'dexie-mongoify'
+import Storex, { FindManyOptions } from '@worldbrain/storex'
+import { Bookmarks } from 'webextension-polyfill-ts'
 
-import { Page, Visit, Bookmark, Tag, FavIcon } from './models'
+export type DBGet = () => Promise<Storex>
 
 export type SuggestOptions = FindManyOptions & { includePks?: boolean }
 export type SuggestResult<S, P> = Array<{
@@ -11,68 +10,11 @@ export type SuggestResult<S, P> = Array<{
     pk: P
 }>
 
-interface MemexCollection extends StorageCollection {
-    suggestObjects<S, P = any>(
-        query,
-        options?: SuggestOptions,
-    ): Promise<SuggestResult<S, P>>
-    findByPk<T = any>(pk): Promise<T>
-    streamPks<K = any>(): AsyncIterableIterator<K>
-    streamCollection<K = any, T = any>(): AsyncIterableIterator<{
-        pk: K
-        object: T
-    }>
-}
-
-export interface StorageManager extends Storex {
-    collection(name: string): MemexCollection
-    deleteDB(name: string): IDBOpenDBRequest
-}
-
-export interface Dexie extends DexieOrig {
-    /**
-     * Represents page data - our main data type.
-     */
-    pages: DexieOrig.Table<Page, string>
-
-    /**
-     * Represents page visit timestamp and activity data.
-     */
-    visits: DexieOrig.Table<Visit, [number, string]>
-
-    /**
-     * Represents page visit timestamp and activity data.
-     */
-    bookmarks: DexieOrig.Table<Bookmark, string>
-
-    /**
-     * Represents tags associated with Pages.
-     */
-    tags: DexieOrig.Table<Tag, [string, string]>
-
-    /**
-     * Represents fav-icons associated with hostnames.
-     */
-    favIcons: DexieOrig.Table<FavIcon, string>
-    // Quick typings as `dexie-mongoify` doesn't contain any
-    collection: <T>(
-        name: string,
-    ) => {
-        find(query: FilterQuery<T>): DexieOrig.Collection<T, any>
-        count(query: FilterQuery<T>): Promise<number>
-        update(
-            query: FilterQuery<T>,
-            update,
-        ): Promise<{ modifiedCount: number }>
-        remove(query: FilterQuery<T>): Promise<{ deletedCount: number }>
-    }
-}
-
 export type VisitInput = number
 export type BookmarkInput = number
 export type PageID = string
 export type PageScore = number
-export type SearchResult = [PageID, PageScore]
+export type SearchResult = [PageID, PageScore, number]
 export type TermsIndexName = 'terms' | 'urlTerms' | 'titleTerms'
 export type PageResultsMap = Map<PageID, PageScore>
 
@@ -80,6 +22,7 @@ export interface SearchParams {
     domains: string[]
     domainsExclude: string[]
     tags: string[]
+    tagsExc: string[]
     terms: string[]
     termsExclude: string[]
     bookmarks: boolean
@@ -90,21 +33,13 @@ export interface SearchParams {
     lists: string[]
 }
 
-export interface FilteredURLs {
-    include: Set<string>
-    exclude: Set<string>
+export interface FilteredIDs<T = string> {
+    include: Set<T>
+    exclude: Set<T>
+    isAllowed(url: T): boolean
     isDataFiltered: boolean
-    isAllowed(url: string): boolean
 }
 
-/**
- * @typedef {Object} VisitInteraction
- * @property {number} duration Time user was active during visit (ms).
- * @property {number} scrollPx Y-axis pixel scrolled to at point in time.
- * @property {number} scrollPerc
- * @property {number} scrollMaxPx Furthest y-axis pixel scrolled to during visit.
- * @property {number} scrollMaxPerc
- */
 export interface VisitInteraction {
     duration: number
     scrollPx: number
@@ -113,12 +48,6 @@ export interface VisitInteraction {
     scrollMaxPerc: number
 }
 
-/**
- * @typedef {Object} PageAddRequest
- * @property {any} pageData TODO: type
- * @property {number[]} [visits=[]] Opt. visit times to assoc. with Page.
- * @property {number} [bookmark] Opt. bookmark time to assoc. with Page.
- */
 export interface PageAddRequest {
     pageDoc: PageDoc
     visits: VisitInput[]
@@ -167,4 +96,71 @@ export interface PipelineRes {
     favIconURI?: string
     screenshotURI?: string
     text: string
+}
+
+export interface SearchIndex {
+    search: (params: {
+        query: string
+        showOnlyBookmarks: boolean
+        mapResultsFunc?: any
+        domains?: string[]
+        domainsExclude?: string[]
+        tags?: any[]
+        lists?: any[]
+        [key: string]: any
+    }) => Promise<{
+        docs: any[]
+        isBadTerm?: boolean
+        requiresMigration?: boolean
+        totalCount: number
+        resultsExhausted: boolean
+    }>
+    getMatchingPageCount: (pattern) => Promise<any>
+    fullSearch: (
+        params: SearchParams,
+    ) => Promise<{
+        ids: Array<[string, number, number]>
+        totalCount: number
+    }>
+
+    getPage: (url: string) => Promise<any>
+    addPage: (params: Partial<PageAddRequest>) => Promise<void>
+    addPageTerms: (pipelineReq: PipelineReq) => Promise<void>
+    delPages: (urls: string[]) => Promise<{ info: any }[]>
+    delPagesByDomain: (url: string) => Promise<any>
+    delPagesByPattern: (pattern: string | RegExp) => Promise<any>
+
+    addBookmark: (params: {
+        url: string
+        fullUrl?: string
+        timestamp?: number
+        tabId?: number
+    }) => Promise<void>
+    delBookmark: (params: Partial<Bookmarks.BookmarkTreeNode>) => Promise<void>
+    pageHasBookmark: (url: string) => Promise<boolean>
+
+    updateTimestampMeta: (
+        url: string,
+        time: number,
+        data: Partial<VisitInteraction>,
+    ) => Promise<any>
+    addVisit: (url: string, time?: number) => Promise<any>
+
+    addFavIcon: (url: string, favIconURI: string) => Promise<any>
+    domainHasFavIcon: (url: string) => Promise<boolean>
+
+    createPageFromTab: (params: PageCreationProps) => Promise<PipelineRes>
+    createPageFromUrl: (params: PageCreationProps) => Promise<PipelineRes>
+    createPageViaBmTagActs: (params: PageCreationProps) => Promise<PipelineRes>
+    createTestPage: (params: PageCreationProps) => Promise<PipelineRes>
+}
+
+export interface PageCreationProps {
+    url: string
+    fullUrl?: string
+    tabId?: number
+    stubOnly?: boolean
+    allowScreenshot?: boolean
+    save?: boolean
+    visitTime?: number
 }

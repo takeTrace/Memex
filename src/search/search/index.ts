@@ -1,4 +1,4 @@
-import { SearchParams, PageResultsMap, Dexie } from '..'
+import { SearchParams, PageResultsMap, DBGet } from '..'
 import QueryBuilder from '../query-builder'
 import { initErrHandler } from '../storage'
 import { groupLatestEventsByUrl, mapUrlsToLatestEvents } from './events'
@@ -6,10 +6,10 @@ import { mapResultsToDisplay } from './map-results-to-display'
 import { findFilteredUrls } from './filters'
 import { textSearch } from './text-search'
 import { paginate, applyScores } from './util'
-export { domainHasFavIcon } from './fav-icon'
-export { suggest, extendedSuggest } from './suggest'
+import { collections } from '../util'
+import { DexieUtilsPlugin } from '../plugins/dexie-utils'
 
-export const search = (getDb: () => Promise<Dexie>) => async ({
+export const search = (getDb: DBGet) => async ({
     query,
     showOnlyBookmarks,
     mapResultsFunc = mapResultsToDisplay,
@@ -21,7 +21,7 @@ export const search = (getDb: () => Promise<Dexie>) => async ({
 }) => {
     const db = await getDb()
     // Extract query terms via QueryBuilder (may change)
-    const qb = new QueryBuilder()
+    const { isBadTerm, isInvalidSearch, ...qbParams } = new QueryBuilder()
         .searchTerm(query)
         .filterDomains(domains)
         .filterExcDomains(domainsExclude)
@@ -30,7 +30,7 @@ export const search = (getDb: () => Promise<Dexie>) => async ({
         .get()
 
     // Short-circuit search if bad term
-    if (qb.isBadTerm) {
+    if (isBadTerm) {
         return {
             docs: [],
             resultsExhausted: true,
@@ -39,7 +39,7 @@ export const search = (getDb: () => Promise<Dexie>) => async ({
         }
     }
 
-    if (qb.isInvalidSearch) {
+    if (isInvalidSearch) {
         return {
             docs: [],
             resultsExhausted: true,
@@ -48,53 +48,54 @@ export const search = (getDb: () => Promise<Dexie>) => async ({
         }
     }
 
-    // WTF
-    // Reshape needed params; prob consolidate interface later when remove old index code
     const params = {
         ...restParams,
         bookmarks: showOnlyBookmarks,
-        terms: [...qb.query],
-        termsExclude: [...qb.queryExclude],
-        domains: [...qb.domain],
-        domainsExclude: [...qb.domainExclude],
-        tags: [...qb.tags],
-        lists: [...qb.lists],
+        ...qbParams,
     } as SearchParams
 
     const { docs, totalCount } = await db
-        .transaction('r', db.tables, async () => {
-            const results = await fullSearch(getDb)(params)
+        .operation(
+            'transaction',
+            { collections: collections(db) },
+            async () => {
+                const results = await fullSearch(getDb)(params)
 
-            const mappedDocs = await mapResultsFunc(getDb)(results.ids, params)
+                const mappedDocs = await mapResultsFunc(getDb)(
+                    results.ids,
+                    params,
+                )
 
-            return { docs: mappedDocs, totalCount: results.totalCount }
-        })
+                return { docs: mappedDocs, totalCount: results.totalCount }
+            },
+        )
         .catch(initErrHandler({ docs: [], totalCount: 0 }))
 
     return {
         docs,
-        resultsExhausted: docs.length < params.limit,
-        isBadTerm: qb.isBadTerm,
+        isBadTerm,
         totalCount,
+        resultsExhausted: docs.length < params.limit,
     }
 }
 
 // WARNING: Inefficient; goes through entire table
-export const getMatchingPageCount = (
-    getDb: () => Promise<Dexie>,
-) => async pattern => {
+export const getMatchingPageCount = (getDb: DBGet) => async pattern => {
     const db = await getDb()
-    const re = new RegExp(pattern, 'i')
-    return db.pages
-        .filter(page => re.test(page.url))
-        .count()
+
+    return db
+        .operation(DexieUtilsPlugin.REGEXP_COUNT_OP, {
+            collection: 'pages',
+            fieldName: 'url',
+            pattern,
+        })
         .catch(initErrHandler(0))
 }
 
 /**
- * Main search logic. Calls the rest of serach depending on input search params.
+ * Main search logic. Calls the rest of search depending on input search params.
  */
-const fullSearch = (getDb: () => Promise<Dexie>) => async ({
+export const fullSearch = (getDb: DBGet) => async ({
     terms = [],
     termsExclude = [],
     ...params
@@ -124,8 +125,9 @@ const fullSearch = (getDb: () => Promise<Dexie>) => async ({
         const urls = [...urlScoreMultiMap.keys()]
         const latestEvents = await mapUrlsToLatestEvents(getDb)(params, urls)
 
-        urlScoresMap = applyScores(urlScoreMultiMap, latestEvents)
-        totalCount = urlScoresMap.size
+        const scoredResults = applyScores(urlScoreMultiMap, latestEvents)
+        totalCount = scoredResults.length
+        return { ids: paginate(scoredResults, params), totalCount }
     }
 
     return { ids: paginate(urlScoresMap, params), totalCount }

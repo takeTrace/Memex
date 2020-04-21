@@ -1,13 +1,16 @@
 import { createStore, applyMiddleware, compose } from 'redux'
 import thunk from 'redux-thunk'
 
-import initSentry from 'src/util/raven'
+import { createEpicMiddleware, combineEpics } from 'redux-observable'
+
 import rootReducer from './reducer'
 
-const configureStore = () => {
-    const middlewares = [thunk]
+import * as epics from './epics'
 
-    initSentry(middlewares)
+const configureStore = () => {
+    const rootEpic = combineEpics(...Object.values(epics))
+
+    const middlewares = [createEpicMiddleware(rootEpic), thunk]
 
     const enhancers = [applyMiddleware(...middlewares)]
 

@@ -1,3 +1,6 @@
+@value colors: '../../../common-ui/colors.css';
+@value color1, color2, color4, color6, color12 from colors;
+
 .importTable {
     width: 100%;
     padding: 0 15px;
@@ -9,16 +12,14 @@
 
     & th,
     & td {
-        padding: 15px;
+        padding: 15px 10px 10px 10px;
+        width: 21.5%;
+        color: color4;
+        font-weight: 300;
     }
 
     & th {
         font-weight: 600;
-    }
-
-    & td {
-        color: #666;
-        min-width: 180px;
     }
 
     & td.importTableCellSepar {
@@ -28,27 +29,36 @@
     & td:first-child {
         text-align: initial;
         font-weight: 500;
+        width: 35%;
+        padding: 15px 0px 15px 15px;
+    }
+
+    & tr:last-child {
+        border-bottom: none;
     }
 }
 
 .importTableHead {
-    font-size: 16px;
-    color: #666;
-    border-bottom: 1px solid #d2d2d2;
+    font-size: 14px;
+    color: color4;
     line-height: 1.2;
 }
 
 .importTableRow {
     font-size: 14px;
-    height: 100px;
+    height: 90px;
+    vertical-align: middle;
+    border-bottom: solid 1px #efefef;
+}
 
-    &:nth-child(even) {
-        background-color: #f6f6f6;
-    }
+.labelContainer {
+    display: flex;
+    flex-direction: column;
+}
 
-    &:nth-child(odd) {
-        background-color: #fbfafa;
-    }
+.link {
+    color: color3;
+    text-decoration: none;
 }
 
 .importTableHelp {
@@ -72,43 +82,43 @@
     flex-direction: column;
     height: auto;
     justify-content: space-between;
-    background: #fbfafa;
+    background: transparent;
     border-radius: 10px;
 }
 
 .mainContainer {
     position: relative;
-    background-color: #fbfafa;
+    background-color: transparent;
 }
 
 .loadingBlocker {
-    z-index: 2;
     position: absolute;
     top: 0;
+    left: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    height: 750px;
-    width: 830px;
-    background: #fbfafa;
-    opacity: 0.8;
+    height: 100%;
+    width: 100%;
+    text-align: center;
+    z-index: 25000000;
+    background: white;
 }
 
 .loadingMsg {
-    font-weight: bold;
+    margin-top: -30px;
+    composes: sectionTitle from 'src/options/settings/components/settings.css';
 }
 
 .title {
-    color: #3eb995;
-    font-weight: bold;
-    font-size: 16px;
-    letter-spacing: 1px;
+    composes: sectionTitle from 'src/options/base.css';
 }
 
 .warningContainer {
     display: flex;
     flex-direction: row;
+    font-size: 15px;
 }
 
 .warningContainerReport {
@@ -119,35 +129,43 @@
 }
 
 .stepNumber {
-    font-size: 18px;
-    color: #3eb995;
+    font-size: 20px;
+    color: color4;
     font-weight: 600;
     letter-spacing: 1px;
-    margin-top: 20px;
+    margin-top: 10px;
     margin-bottom: 10px;
 }
 
 .stepText {
+    color: color6;
     font-size: 15px;
     font-weight: 300;
-    color: #777;
     margin-top: 0px;
     margin-bottom: 0px;
-    margin-left: 10px;
 }
 
 .warning {
     display: flex;
     margin: 1em 0;
     flex-direction: row;
-    color: #d5969e;
-    margin-top: 30px;
+    color: white;
+    align-items: center;
+    font-weight: 500;
+    margin-top: 20px;
+    border: 2px solid color12;
+    padding: 10px 10px;
+    border-radius: 6px;
+    justify-content: center;
+    background: #f29d9d;
 }
 
 .warningText {
     left: 5px;
     position: relative;
     margin: 0;
+    line-height: 22px;
+    font-size: 14px;
 }
 
 .warningCode {
@@ -156,8 +174,8 @@
 
 .icon {
     width: auto;
-    height: 20px;
-    margin-bottom: 20px;
+    height: 30px;
+    margin-right: 10px;
 }
 
 .stepImportText {
@@ -170,8 +188,9 @@
 }
 
 .checkboxSubText {
-    margin-left: 24px;
     font-size: 12px;
+    color: color6;
+    display: inline-block;
 }
 
 .checkbox {
@@ -287,4 +306,47 @@
     &:hover {
         cursor: pointer;
     }
+}
+
+.selectFile {
+    padding: 10px 20px;
+    border-radius: 5px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid #5671cf;
+    display: inline-block;
+    font-size: 14px;
+    color: #5671cf;
+
+    &[disabled] {
+        opacity: 0;
+        cursor: not-allowed;
+    }
+}
+
+.hidden {
+    composes: selectFile;
+    opacity: 0;
+    cursor: not-allowed;
+    vertical-align: super;
+}
+
+input[type='file'] {
+    display: none;
+}
+
+.tutorial {
+    composes: helpIcon from 'src/common-ui/icons.css';
+    composes: nakedSquareButton from 'src/common-ui/elements.css';
+    width: 25px;
+    height: 25px;
+    background-size: 20px;
+    display: flex;
+    vertical-align: middle;
+}
+
+.uploaderBox {
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }

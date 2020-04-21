@@ -1,44 +1,30 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import NotificationLayout from '../layout'
-import { getExtURL } from '../utils.js'
 
 const styles = require('./power-search-browse.css')
 
-const images = {
-    closeIcon: getExtURL('/img/cross.svg'),
-    annotateIcon: getExtURL('/img/annotate.svg'),
-    shareIcon: getExtURL('/img/share.svg'),
-}
-
-export default function PowerSearchBrowse({ onCloseRequested, openDashboard }) {
+export default function PowerSearchBrowse({ onCloseRequested }) {
     return (
         <div className={styles.container}>
             <NotificationLayout
                 title={''}
-                icon={null}
                 onCloseRequested={onCloseRequested}
                 thirdRowImage={null}
-                closeIcon={images.closeIcon}
             >
                 <div className={styles.notifContainer}>
-                    <p className={styles.title}>
-                        From now on you can search with any word of any page you
-                        visit.
-                    </p>
-                    <p className={styles.instructions}>
-                        Search via the{' '}
-                        <span className={styles.button} onClick={openDashboard}>
-                            Dashboard
-                        </span>{' '}
-                        or via the address bar by typing{' '}
-                    </p>
-                    <p className={styles.keys}>
-                        <span className={styles.key}>W</span>+
-                        <span className={styles.key}>SPACE</span>
-                        or
-                        <span className={styles.key}>TAB</span>
-                    </p>
+                    <div className={styles.title}>
+                        Memex makes every page you visit full-text searchable.
+                    </div>
+                    <div className={styles.instructions}>
+                        Type this shortcut into the address bar and search with
+                        a term you see on this page
+                    </div>
+                    <div className={styles.tutorial}>
+                        <div className={styles.keyboardM}>M</div>
+                        <div className={styles.keyboardPlus}>then</div>
+                        <div className={styles.keyboardSpace}>Space</div>
+                    </div>
                 </div>
             </NotificationLayout>
         </div>
@@ -47,5 +33,4 @@ export default function PowerSearchBrowse({ onCloseRequested, openDashboard }) {
 
 PowerSearchBrowse['propTypes'] = {
     onCloseRequested: PropTypes.func.isRequired,
-    openDashboard: PropTypes.func.isRequired,
 }

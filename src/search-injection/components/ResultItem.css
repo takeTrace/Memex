@@ -2,6 +2,87 @@
     --memex-green: #4abf9d;
 }
 
+.rootContainer {
+    border-top: 0.75px solid #e1e1e1;
+    display: flex;
+    flex-direction: row;
+    position: relative;
+    color: inherit;
+    text-decoration: none;
+    z-index: 0;
+    animation: onload 0.3s cubic-bezier(0.65, 0.05, 0.36, 1);
+    background-color: white;
+    width: 100%;
+    height: 90px;
+}
+
+.rootContainer > a {
+    text-decoration: none !important; /* stylelint-disable-line declaration-no-important */
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    width: 100%;
+}
+
+.infoContainer {
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    max-width: 100%;
+    height: 100%;
+    width: auto;
+    padding: 12px;
+}
+
+.firstlineContainer {
+    color: #3a2f45 !important; /* stylelint-disable-line declaration-no-important */
+    width: 100%;
+    font-size: 15px;
+    flex-wrap: wrap;
+    text-overflow: ellipsis;
+    overflow-x: hidden;
+    overflow: hidden;
+    white-space: nowrap;
+    overflow-wrap: break-word;
+    font-weight: 700;
+    height: 25px;
+}
+
+.title {
+    color: #3a2f45 !important; /* stylelint-disable-line declaration-no-important */
+    display: flex;
+    flex-direction: row;
+    font-size: 16px;
+    align-items: center;
+    width: 97%;
+    flex-basis: 95%;
+    font-weight: 600;
+}
+
+.favIcon {
+    width: 20px;
+    height: 20px;
+    margin-right: 7px;
+}
+
+.url {
+    color: #3a2f45;
+    font-size: 14px;
+    min-width: 0;
+    font-weight: 400;
+    height: 20px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    align-items: center;
+    width: 100%;
+    margin-top: -5px;
+}
+
+.url a {
+    text-decoration: none;
+}
+
 .result {
     background: #fbf9fa;
     padding: 15px;
@@ -9,33 +90,9 @@
 }
 
 .displayTime {
-    font-size: 0.9em;
-    color: #bfbdbe;
-}
-
-.url {
-    color: var(--memex-green);
-    font-size: 1em;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: pre;
-    margin: -2px 0 5px 0;
-    width: 97%;
-}
-
-.title {
-    /* Since google loads css after page load which
-overides the color of links, there is a need
-for !important */
-    color: #444 !important; /* stylelint-disable-line declaration-no-important */
-    font-size: 1.125em;
-    text-decoration: none;
-    width: 97%;
-    display: inline-block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    margin-bottom: 1px;
+    font-size: 12px;
+    color: #3a2f45;
+    height: 15px;
 }
 
 .duckduckgo {

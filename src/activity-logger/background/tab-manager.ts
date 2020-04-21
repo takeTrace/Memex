@@ -1,4 +1,5 @@
 import { Tabs } from 'webextension-polyfill-ts'
+
 import Tab, { TabProps } from './tab-state'
 import { TabState, NavState } from './types'
 
@@ -36,6 +37,12 @@ export class TabManager {
      */
     getTabState(id: number) {
         return this._tabs.get(id)
+    }
+
+    getTabStateByUrl(url: string) {
+        const tabs = new Map<string, Tab>()
+        this._tabs.forEach(tab => tabs.set(tab.url, tab))
+        return tabs.get(url)
     }
 
     getActiveTab() {
@@ -192,10 +199,3 @@ export class TabManager {
             .map(tab => ({ tabId: tab.id, url: tab.url }))
     }
 }
-
-// Set up singleton to use throughout bg script
-const manager = new TabManager()
-
-window['man'] = manager
-
-export default manager

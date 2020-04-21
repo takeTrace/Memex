@@ -1,15 +1,14 @@
 import React from 'react'
 
 import Blacklist from '../../blacklist'
-import styles from './style.css'
+import settingsStyle from 'src/options/settings/components/settings.css'
 
 const SettingsContainer = () => (
     <div>
-        <section className={styles.section}>
-            <div className={styles.title}>
+        <section className={settingsStyle.section}>
+            <div className={settingsStyle.sectionTitle}>
                 {' '}
-                Prevent specific URLs and domains from being indexed when
-                visiting them
+                Prevent URLs and domains from being indexed
             </div>
 
             <Blacklist />

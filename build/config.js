@@ -10,7 +10,7 @@ export const extensions = ['.ts', '.tsx', '.js', '.jsx', '.coffee']
 export const entry = {
     background: './src/background.ts',
     popup: './src/popup/index.tsx',
-    content_script: './src/content_script.js',
+    content_script: './src/content_script.ts',
     options: './src/options/options.jsx',
 }
 
@@ -25,16 +25,15 @@ export default ({ context = __dirname, mode = 'development', ...opts }) => {
     const aliases = {
         src: path.resolve(context, './src'),
     }
+
     for (const externalTsModule of externalTsModules) {
+        const extPath = path.resolve(
+            context,
+            `./external/${externalTsModule}/ts`,
+        )
         Object.assign(aliases, {
-            [`${externalTsModule}$`]: path.resolve(
-                context,
-                `./external/${externalTsModule}/ts`,
-            ),
-            [`${externalTsModule}/lib`]: path.resolve(
-                context,
-                `./external/${externalTsModule}/ts`,
-            ),
+            [`${externalTsModule}$`]: extPath,
+            [`${externalTsModule}/lib`]: extPath,
         })
     }
 

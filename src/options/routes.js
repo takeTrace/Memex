@@ -1,11 +1,14 @@
 import ImportContainer from './imports'
 import SettingsContainer from './containers/settings'
-import BackupSettingsContainer from './backup'
+import BackupSettingsContainer from '../backup-restore/ui/backup-pane'
 import Privacy from './privacy'
-import Tutorial from './tutorial'
 import Statistics from './statistics'
 import Settings from './settings'
 import Overview from '../overview'
+import UserScreen from '../authentication/components/UserScreen'
+import { FeaturesOptInScreen } from '../feature-opt-in/ui/components/FeaturesOptInScreen'
+import React from 'react'
+import SyncDevicesPaneContainer from '../sync/components/device-list/SyncDevicesPane'
 
 export default [
     {
@@ -15,7 +18,7 @@ export default [
         hideFromSidebar: true,
     },
     {
-        name: 'Go back to Search',
+        name: 'Search Dashboard',
         pathname: '/overview',
         component: Overview,
         icon: 'search',
@@ -28,20 +31,26 @@ export default [
         icon: 'settings',
     },
     {
-        name: 'Import History & Bookmarks',
+        name: 'Import',
         pathname: '/import',
         component: ImportContainer,
-        icon: 'file_download',
+        icon: 'import',
     },
     {
-        name: 'Backup',
+        name: 'Backup & Restore',
         pathname: '/backup',
         component: BackupSettingsContainer,
         icon: 'backup',
     },
     {
-        name: 'Blacklist',
-        pathname: '/blacklist',
+        name: 'Sync',
+        pathname: '/sync',
+        component: SyncDevicesPaneContainer,
+        icon: 'sync',
+    },
+    {
+        name: 'Blocklist',
+        pathname: '/blocklist',
         component: SettingsContainer,
         icon: 'block',
     },
@@ -49,24 +58,48 @@ export default [
         name: 'Privacy',
         pathname: '/privacy',
         component: Privacy,
-        icon: 'security',
+        icon: 'privacy',
     },
+    // {
+    //     name: 'Memex Team',
+    //     pathname: 'https://worldbrain.io/team',
+    //     icon: 'team',
+    //     isExternal: true,
+    // },
     {
-        name: 'Who is behind this?',
-        pathname: 'https://worldbrain.io/team',
-        icon: 'people',
-        isExternal: true,
-    },
-    {
-        name: 'Help Me Please',
+        name: 'Help',
         pathname: 'https://worldbrain.io/help',
         icon: 'help',
         isExternal: true,
     },
     {
         name: 'Tutorial',
-        pathname: '/tutorial',
-        component: Tutorial,
+        pathname:
+            'https://www.notion.so/worldbrain/Tutorials-fa44dcbf41654ceb910c5952b6097f8d',
+        isExternal: true,
         icon: 'info',
+    },
+    {
+        name: 'User Account',
+        pathname: '/account',
+        icon: 'settings',
+        component: UserScreen,
+        hideFromSidebar: true,
+    },
+    {
+        name: 'User Account Subscriptions',
+        pathname: '/account-subscriptions',
+        icon: 'settings',
+        component: props => (
+            <UserScreen initiallyShowSubscriptionModal {...props} />
+        ),
+        hideFromSidebar: true,
+    },
+    {
+        name: 'Opt In Features',
+        pathname: '/features',
+        icon: 'settings',
+        component: FeaturesOptInScreen,
+        hideFromSidebar: true,
     },
 ]

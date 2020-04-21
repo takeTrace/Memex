@@ -6,20 +6,18 @@ import cx from 'classnames'
 
 import { actions, selectors } from 'src/custom-lists'
 import extStyles from './Index.css'
-import MyCollection from './MyCollections'
+import MyCollection from './my-collections'
 import CreateListForm from './CreateListForm'
-import ListItem from './ListItem'
+import ListItem from './list-item'
 import DeleteConfirmModal from 'src/overview/delete-confirm-modal/components/DeleteConfirmModal'
-import { CrowdfundingModal } from '../../../../common-ui/crowdfunding'
-import { actions as filterActs } from '../../../../search-filters'
-import * as sidebar from '../../../../overview/sidebar-left/selectors'
+import { actions as filterActs } from 'src/search-filters'
+import { selectors as sidebar } from 'src/overview/sidebar-left'
 
 class ListContainer extends Component {
     static propTypes = {
         getListFromDB: PropTypes.func.isRequired,
         lists: PropTypes.array.isRequired,
         handleEditBtnClick: PropTypes.func.isRequired,
-        setShowCrowdFundingModal: PropTypes.func.isRequired,
         isDeleteConfShown: PropTypes.bool.isRequired,
         resetListDeleteModal: PropTypes.func.isRequired,
         handleCrossBtnClick: PropTypes.func.isRequired,
@@ -31,8 +29,8 @@ class ListContainer extends Component {
         toggleCreateListForm: PropTypes.func.isRequired,
         showCreateList: PropTypes.bool.isRequired,
         showCommonNameWarning: PropTypes.bool.isRequired,
-        showCrowdFundingModal: PropTypes.bool.isRequired,
         isSidebarOpen: PropTypes.bool.isRequired,
+        isSidebarLocked: PropTypes.bool.isRequired,
         closeCreateListForm: PropTypes.func.isRequired,
         resetUrlDragged: PropTypes.func.isRequired,
     }
@@ -94,7 +92,7 @@ class ListContainer extends Component {
 
     renderAllLists = () => {
         return this.props.lists.map((list, i) => {
-            if (list.isEditing && this.props.isSidebarOpen) {
+            if (list.isEditing) {
                 return (
                     <CreateListForm
                         key={i}
@@ -116,11 +114,9 @@ class ListContainer extends Component {
                 <ListItem
                     key={i}
                     listName={list.name}
+                    isMobileList={list.isMobileList}
                     isFiltered={list.isFilterIndex}
                     onEditButtonClick={this.props.handleEditBtnClick(i)}
-                    onShareButtonClick={this.props.setShowCrowdFundingModal(
-                        true,
-                    )}
                     onListItemClick={this.props.handleListItemClick(list, i)}
                     onAddPageToList={this.props.handleAddPageList(list, i)}
                     onCrossButtonClick={this.props.handleCrossBtnClick(list, i)}
@@ -131,7 +127,7 @@ class ListContainer extends Component {
     }
 
     renderCreateList = (shouldDisplayForm, value = null) =>
-        shouldDisplayForm && this.props.isSidebarOpen ? (
+        shouldDisplayForm && (
             <CreateListForm
                 onCheckboxClick={this.handleCreateListSubmit}
                 handleNameChange={this.handleSearchChange('listName')}
@@ -140,12 +136,13 @@ class ListContainer extends Component {
                 setInputRef={this.setInputRef}
                 closeCreateListForm={this.props.closeCreateListForm}
             />
-        ) : null
+        )
 
     render() {
         return (
             <React.Fragment>
                 <MyCollection
+                    isSidebarLocked={this.props.isSidebarLocked}
                     handleRenderCreateList={this.props.toggleCreateListForm}
                 />
 
@@ -153,29 +150,40 @@ class ListContainer extends Component {
                 <div
                     className={cx({
                         [extStyles.allLists]: this.props.isSidebarOpen,
+                        [extStyles.allListsLocked]: this.props.isSidebarLocked,
                     })}
                 >
                     <div
                         className={cx({
                             [extStyles.wrapper]: this.props.isSidebarOpen,
                             [extStyles.allListsInner]: this.props.isSidebarOpen,
+                            [extStyles.wrapperLocked]: this.props
+                                .isSidebarLocked,
                         })}
                     >
-                        {this.renderAllLists()}
+                        {this.props.lists.length === 1 ? (
+                            <div>
+                                {this.renderAllLists()}
+                                <div className={extStyles.noLists}>
+                                    <strong>
+                                        You don't have any collections{' '}
+                                    </strong>
+                                    <br />
+                                    Create one with the + icon and drag and drop
+                                    items into it.
+                                </div>
+                            </div>
+                        ) : (
+                            <div>{this.renderAllLists()}</div>
+                        )}
                     </div>
                 </div>
                 <DeleteConfirmModal
+                    message="Delete collection? This does not delete the pages in it"
                     isShown={this.props.isDeleteConfShown}
                     onClose={this.props.resetListDeleteModal}
                     deleteDocs={this.props.handleDeleteList}
                 />
-                {this.props.showCrowdFundingModal ? (
-                    <CrowdfundingModal
-                        onClose={this.props.setShowCrowdFundingModal(false)}
-                        context="collections"
-                        learnMoreUrl="https://worldbrain.io/pricing/"
-                    />
-                ) : null}
             </React.Fragment>
         )
     }
@@ -184,10 +192,10 @@ class ListContainer extends Component {
 const mapStateToProps = state => ({
     lists: selectors.results(state),
     isDeleteConfShown: selectors.isDeleteConfShown(state),
-    showCrowdFundingModal: selectors.showCrowdFundingModal(state),
     showCreateList: selectors.showCreateListForm(state),
     showCommonNameWarning: selectors.showCommonNameWarning(state),
     isSidebarOpen: sidebar.isSidebarOpen(state),
+    isSidebarLocked: sidebar.sidebarLocked(state),
 })
 
 const mapDispatchToProps = (dispatch, getState) => ({
@@ -207,29 +215,29 @@ const mapDispatchToProps = (dispatch, getState) => ({
         event.preventDefault()
         dispatch(actions.showEditBox(index))
     },
-    setShowCrowdFundingModal: value => e => {
-        e.preventDefault()
-        e.stopPropagation()
-        dispatch(actions.setShowCrowdFundingModal(value))
-    },
     handleCrossBtnClick: ({ id }, index) => event => {
         event.preventDefault()
         dispatch(actions.showListDeleteModal(id, index))
     },
-    handleListItemClick: ({ id }, index) => () => {
+    handleListItemClick: ({ id, isMobileList }, index) => () => {
         dispatch(actions.toggleListFilterIndex(index))
-        dispatch(filterActs.toggleListFilter(id))
+        dispatch(
+            filterActs.toggleListFilter({
+                id,
+                isMobileListFiltered: isMobileList,
+            }),
+        )
     },
-    handleAddPageList: ({ id }, index) => url => {
-        dispatch(actions.addUrltoList(url, index, id))
+    handleAddPageList: ({ id, isMobileList }, index) => (url, isSocialPost) => {
+        if (!isMobileList) {
+            dispatch(actions.addUrltoList(url, isSocialPost, index, id))
+        }
     },
     handleDeleteList: e => {
         e.preventDefault()
         dispatch(actions.deletePageList())
+        dispatch(filterActs.delListFilter())
     },
 })
 
-export default connect(
-    mapStateToProps,
-    mapDispatchToProps,
-)(ListContainer)
+export default connect(mapStateToProps, mapDispatchToProps)(ListContainer)

@@ -1,37 +1,68 @@
 import React from 'react'
 import PropTypes from 'prop-types'
-
+import ButtonTooltip from '../../common-ui/components/button-tooltip'
 import styles from './tooltip.css'
-import { getExtURL } from '../utils'
+import classNames from 'classnames'
+import { browser } from 'webextension-polyfill-ts'
 
-const images = {
-    share: getExtURL('/img/share.svg'),
-    check: getExtURL('/img/green_check.svg'),
-    annotate: getExtURL('/img/annotate.svg'),
-}
+const highlighter = browser.extension.getURL('/img/highlightOn.svg')
+const annotations = browser.extension.getURL('/img/comment_add.svg')
+const share = browser.extension.getURL('/img/share.svg')
+const close = browser.extension.getURL('/img/close.svg')
 
-export const InitialComponent = ({ createLink, createAnnotation }) => (
+export const InitialComponent = ({
+    createLink,
+    createHighlight,
+    createAnnotation,
+    closeTooltip,
+    state,
+}) => (
     <div className={styles.createButtons}>
-        <div
-            title={'Add note to highlight'}
-            className={styles.annotateButton}
-            onMouseDown={createAnnotation}
-        >
-            <span className={styles.annotateIcon} />
+        <div className={styles.button} onClick={createHighlight}>
+            <ButtonTooltip tooltipText="Highlight (N)" position="bottom">
+                <img src={highlighter} className={styles.buttonImg} />
+            </ButtonTooltip>
         </div>
+
+        <div className={styles.button} onClick={createAnnotation}>
+            <ButtonTooltip tooltipText="Annotate (A)" position="bottom">
+                <img src={annotations} className={styles.buttonImg} />
+            </ButtonTooltip>
+        </div>
+        {createLink && (
+            <ButtonTooltip
+                tooltipText="Create Link to Highlight (L)"
+                position="bottom"
+            >
+                <div className={styles.button} onClick={createLink}>
+                    <img src={share} className={styles.buttonImg} />
+                </div>
+            </ButtonTooltip>
+        )}
+
         <div
-            title={'Share a link to this highlight'}
-            className={styles.linkButton}
-            onMouseDown={createLink}
+            onClick={closeTooltip}
+            className={classNames(styles.button, styles.closeBtn, {
+                [styles.noShow]: state === 'running',
+                [styles.noShow]: state === 'copied',
+            })}
         >
-            <span className={styles.shareIcon} />
+            <ButtonTooltip
+                tooltipText="Close. Disable in Toolbar (R)"
+                position="bottom"
+            >
+                <img src={close} className={styles.buttonImg} />
+            </ButtonTooltip>
         </div>
     </div>
 )
 
 InitialComponent.propTypes = {
-    createLink: PropTypes.func.isRequired,
+    createLink: PropTypes.func,
+    createHighlight: PropTypes.func.isRequired,
     createAnnotation: PropTypes.func.isRequired,
+    closeTooltip: PropTypes.func.isRequired,
+    state: PropTypes.string,
 }
 
 export const CreatingLinkComponent = () => (
@@ -47,21 +78,21 @@ export const CreatingLinkComponent = () => (
 
 export const CopiedComponent = () => (
     <div className={styles.copiedMessage}>
-        <img className={styles.check} src={images.check} />
+        <span className={styles.check} />
         <div className={styles.copiedTextContainer}>
-            <p className={styles.greenText}>
+            <span className={styles.greenText}>
                 Highlight link copied to clipboard
-            </p>
-            <p className={styles.greyText}>
+            </span>
+            <span className={styles.greyText}>
                 Everyone opening it can see this quote
-            </p>
+            </span>
         </div>
     </div>
 )
 
 export const DoneComponent = () => (
     <div className={styles.doneComponent}>
-        <img className={styles.check} src={images.check} />
+        <span className={styles.check} />
     </div>
 )
 

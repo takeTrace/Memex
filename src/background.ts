@@ -1,100 +1,157 @@
-import 'babel-polyfill'
-import 'core-js/es7/symbol'
-
+import 'core-js'
 import { browser } from 'webextension-polyfill-ts'
+import { createSelfTests } from '@worldbrain/memex-common/lib/self-tests'
+
 import initStorex from './search/memex-storex'
-import getDb, { setStorexBackend } from './search'
-import internalAnalytics from './analytics/internal'
+import getDb, { setStorex } from './search/get-db'
 import initSentry from './util/raven'
+import { setupRemoteFunctionsImplementations } from 'src/util/webextensionRPC'
+import { StorageChangesManager } from 'src/util/storage-changes'
 
 // Features that require manual instantiation to setup
-import DirectLinkingBackground from './direct-linking/background'
-import EventLogBackground from './analytics/internal/background'
-import CustomListBackground from './custom-lists/background'
-import NotificationBackground from './notifications/background'
-import * as backup from './backup/background'
-import * as backupStorage from './backup/background/storage'
-import * as driveBackup from './backup/background/backend/google-drive'
-import setupChangeTracking from './backup/background/change-hooks'
-import BackgroundScript from './background-script'
-import TagsBackground from './tags/background'
+import createNotification from 'src/util/notifications'
 
 // Features that auto-setup
-import { tabManager } from './activity-logger/background'
-import './search/background'
 import './analytics/background'
 import './imports/background'
 import './omnibar'
+import analytics from './analytics'
+import {
+    createBackgroundModules,
+    setupBackgroundModules,
+    registerBackgroundModuleCollections,
+} from './background-script/setup'
+import { createLazySharedSyncLog } from './sync/background/shared-sync-log'
+import { createFirebaseSignalTransport } from './sync/background/signalling'
+import { DevAuthState } from 'src/authentication/background/setup'
+import { MemoryAuthService } from '@worldbrain/memex-common/lib/authentication/memory'
+import { TEST_USER } from '@worldbrain/memex-common/lib/authentication/dev'
+import { FeatureOptIns } from 'src/feature-opt-in/background/feature-opt-ins'
+import { FetchPageDataProcessor } from 'src/page-analysis/background/fetch-page-data-processor'
+import fetchPageData from 'src/page-analysis/background/fetch-page-data'
+import pipeline from 'src/search/pipeline'
+import { setStorageMiddleware } from './storage/middleware'
+import { getFirebase } from './util/firebase-app-initialized'
 
-initSentry()
+export async function main() {
+    const localStorageChangesManager = new StorageChangesManager({
+        storage: browser.storage,
+    })
+    initSentry({ storageChangesManager: localStorageChangesManager })
 
-const storageManager = initStorex()
+    const getSharedSyncLog = createLazySharedSyncLog()
+    const fetchPageDataProcessor = new FetchPageDataProcessor({
+        fetchPageData,
+        pagePipeline: pipeline,
+    })
 
-const notifications = new NotificationBackground({ storageManager })
-notifications.setupRemoteFunctions()
+    const storageManager = initStorex()
+    const backgroundModules = createBackgroundModules({
+        storageManager,
+        localStorageChangesManager,
+        includePostSyncProcessor: true,
+        browserAPIs: browser,
+        signalTransportFactory: createFirebaseSignalTransport,
+        fetchPageDataProcessor,
+        getSharedSyncLog,
+        authOptions: {
+            devAuthState: process.env.DEV_AUTH_STATE as DevAuthState,
+        },
+        getIceServers: async () => {
+            const firebase = await getFirebase()
+            const generateToken = firebase
+                .functions()
+                .httpsCallable('generateTwilioNTSToken')
+            const response = await generateToken({})
+            return response.data.iceServers
+        },
+    })
+    registerBackgroundModuleCollections(storageManager, backgroundModules)
+    await storageManager.finishInitialization()
 
-const directLinking = new DirectLinkingBackground({ storageManager, getDb })
-directLinking.setupRemoteFunctions()
-directLinking.setupRequestInterceptor()
+    await setStorageMiddleware(storageManager, {
+        syncService: backgroundModules.sync,
+        storexHub: backgroundModules.storexHub,
+    })
 
-const eventLog = new EventLogBackground({ storageManager })
-eventLog.setupRemoteFunctions()
+    setStorex(storageManager)
 
-const customList = new CustomListBackground({
-    storageManager,
-    getDb,
-    tabMan: tabManager,
-    windows: browser.windows,
-})
-customList.setupRemoteFunctions()
+    await setupBackgroundModules(backgroundModules, storageManager)
 
-const tags = new TagsBackground({
-    storageManager,
-    getDb,
-    tabMan: tabManager,
-    windows: browser.windows,
-})
-tags.setupRemoteFunctions()
+    // Gradually moving all remote function registrations here
+    setupRemoteFunctionsImplementations({
+        auth: backgroundModules.auth.remoteFunctions,
+        subscription: {
+            getCheckoutLink:
+                backgroundModules.auth.subscriptionService.getCheckoutLink,
+            getManageLink:
+                backgroundModules.auth.subscriptionService.getManageLink,
+            getCurrentUserClaims:
+                backgroundModules.auth.subscriptionService.getCurrentUserClaims,
+        },
+        notifications: { create: createNotification } as any,
+        bookmarks: {
+            addPageBookmark:
+                backgroundModules.search.remoteFunctions.bookmarks
+                    .addPageBookmark,
+            delPageBookmark:
+                backgroundModules.search.remoteFunctions.bookmarks
+                    .delPageBookmark,
+        },
+        sync: backgroundModules.sync.remoteFunctions,
+        features: new FeatureOptIns(),
+    })
 
-const backupModule = new backup.BackupBackgroundModule({
-    storageManager,
-    backend:
-        process.env.BACKUP_BACKEND === 'local'
-            ? new (require('./backup/background/backend/simple-http')).default({
-                  url: 'http://localhost:8000',
-              })
-            : new driveBackup.DriveBackupBackend({
-                  tokenStore: new driveBackup.LocalStorageDriveTokenStore({
-                      prefix: 'drive-token-',
-                  }),
-                  memexCloudOrigin: backup._getMemexCloudOrigin(),
-              }),
-    lastBackupStorage: new backupStorage.LocalLastBackupStorage({
-        key: 'lastBackup',
-    }),
-})
-backupModule.setupRemoteFunctions()
-backupModule.setupRequestInterceptor()
-backupModule.startRecordingChangesIfNeeded()
+    // Attach interesting features onto global window scope for interested users
+    window['getDb'] = getDb
+    window['storageMan'] = storageManager
+    window['bgModules'] = backgroundModules
+    window['analytics'] = analytics
+    window['tabMan'] = backgroundModules.activityLogger.tabManager
 
-const bgScript = new BackgroundScript({ notifsBackground: notifications })
-bgScript.setupRemoteFunctions()
-bgScript.setupWebExtAPIHandlers()
+    window['selfTests'] = await createSelfTests({
+        storage: {
+            manager: storageManager,
+        },
+        services: {
+            sync: backgroundModules.sync,
+        },
+        // auth: {
+        //     setUser: async ({ id }) => {
+        //         ;(backgroundModules.auth
+        //             .authService as MemoryAuthService).setUser({
+        //             ...TEST_USER,
+        //             id: id as string,
+        //         })
+        //     },
+        // },
+        intergrationTestData: {
+            insert: async () => {
+                console['log']('Inserting integration test data')
+                const listId = await backgroundModules.customLists.createCustomList(
+                    {
+                        name: 'My list',
+                    },
+                )
+                await backgroundModules.customLists.insertPageToList({
+                    id: listId,
+                    url:
+                        'http://highscalability.com/blog/2019/7/19/stuff-the-internet-says-on-scalability-for-july-19th-2019.html',
+                })
+                await backgroundModules.search.searchIndex.addPage({
+                    pageDoc: {
+                        url:
+                            'http://highscalability.com/blog/2019/7/19/stuff-the-internet-says-on-scalability-for-july-19th-2019.html',
+                        content: {
+                            fullText: 'home page content',
+                            title: 'bla.com title',
+                        },
+                    },
+                    visits: [],
+                })
+            },
+        },
+    })
+}
 
-storageManager.finishInitialization().then(() => {
-    setStorexBackend(storageManager.backend)
-    internalAnalytics.registerOperations(eventLog)
-    backupModule.storage.setupChangeTracking()
-})
-
-// Attach interesting features onto global window scope for interested users
-window['backup'] = backupModule
-window['getDb'] = getDb
-window['storageMan'] = storageManager
-window['bgScript'] = bgScript
-window['eventLog'] = eventLog
-window['directLinking'] = directLinking
-window['customList'] = customList
-window['notifications'] = notifications
-
-console.log('Background script initialized')
+main()

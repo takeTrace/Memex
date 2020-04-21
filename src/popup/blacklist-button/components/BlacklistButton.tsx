@@ -34,11 +34,15 @@ class BookmarkButton extends PureComponent<Props> {
     private renderBlacklisted() {
         return (
             <LinkButton
-                href={`${OPTIONS_URL}#/blacklist`}
+                href={`${OPTIONS_URL}#/blocklist`}
                 itemClass={styles.itemBlacklisted}
                 btnClass={styles.itemBtnBlacklisted}
             >
-                This Page is Blacklisted. Undo>>
+                Page on your ignore list. 
+
+                <span className={styles.undo}>
+                Undo
+                </span>
             </LinkButton>
         )
     }
@@ -62,12 +66,14 @@ class BookmarkButton extends PureComponent<Props> {
                 <Button
                     title={'Delete all pages from this domain'}
                     onClick={this.props.handleBlacklistingChoice(true)}
+                    itemClass={styles.splitSide}
                 >
                     Domain
                 </Button>
                 <Button
                     title={'Delete only this URL'}
                     onClick={this.props.handleBlacklistingChoice(false)}
+                    itemClass={styles.splitSide}
                 >
                     URL
                 </Button>

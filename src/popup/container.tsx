@@ -13,7 +13,6 @@ import {
 } from '../common-ui/containers'
 import Search from './components/Search'
 import LinkButton from './components/LinkButton'
-import UpgradeButton from './components/UpgradeButton'
 import ButtonIcon from './components/ButtonIcon'
 import { TooltipButton } from './tooltip-button'
 import { SidebarButton } from './sidebar-button'
@@ -145,24 +144,46 @@ class PopupContainer extends PureComponent<Props> {
                     onSearchChange={this.props.handleSearchChange}
                     onSearchEnter={this.onSearchEnter}
                 />
-                <LinkButton
-                    btnClass={btnStyles.searchIcon}
-                    href={`${constants.OPTIONS_URL}#/overview`}
-                >
-                    Go to Dashboard
-                </LinkButton>
+                <div className={styles.item}>
+                    <LinkButton
+                        btnClass={btnStyles.openIcon}
+                        href={`${constants.OPTIONS_URL}#/overview`}
+                    >
+                        Go to Dashboard
+                    </LinkButton>
+                </div>
                 <hr />
-                <BookmarkButton closePopup={this.closePopup} />
-                <TagsButton />
-                <CollectionsButton />
+                <div className={styles.item}>
+                    <BookmarkButton closePopup={this.closePopup} />
+                </div>
+
+                <div className={styles.item}>
+                    <TagsButton />
+                </div>
+
+                <div className={styles.item}>
+                    <CollectionsButton />
+                </div>
                 <hr />
-                <HistoryPauser />
-                <BlacklistButton />
+
+                <div className={styles.item}>
+                    <HistoryPauser />
+                </div>
+
+                <div className={styles.item}>
+                    <BlacklistButton />
+                </div>
                 <hr />
-                <SidebarButton closePopup={this.closePopup} />
-                <TooltipButton closePopup={this.closePopup} />
+
+                <div className={styles.item}>
+                    <SidebarButton closePopup={this.closePopup} />
+                </div>
+
+                <div className={styles.item}>
+                    <TooltipButton closePopup={this.closePopup} />
+                </div>
+
                 <hr />
-                <UpgradeButton />
                 <div className={styles.buttonContainer}>
                     <ButtonIcon
                         href={`${constants.OPTIONS_URL}#/settings`}
@@ -175,7 +196,7 @@ class PopupContainer extends PureComponent<Props> {
                         icon="help"
                         btnClass={btnStyles.help}
                     />
-                    <NotifButton />
+                    {/*<NotifButton />*/}
                 </div>
             </React.Fragment>
         )

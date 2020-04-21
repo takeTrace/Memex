@@ -1,3 +1,4 @@
+/* eslint no-console: 0 */
 const path = require('path')
 const fs = require('fs')
 const { config: configEnv } = require('dotenv')
@@ -63,4 +64,9 @@ async function publishFF() {
     }
 }
 
-publishFF().then(publishChrome)
+switch (process.argv[2]) {
+    case '--ff':
+        return publishFF()
+    case '--chrome':
+        return publishChrome()
+}

@@ -31,9 +31,7 @@ export const conditionallyShowHighlightNotification = async ({
     // Toolbar Notfication doesn't destroy the previous tooltip by default
     // So hack to destroy it using private method.
     toolbarNotifications._destroyRootElement()
-    toolbarNotifications.showToolbarNotification('onboarding-select-option', {
-        position,
-    })
+
     processEventRPC({
         type: EVENT_NAMES.ONBOARDING_HIGHLIGHT_MADE,
     })
@@ -55,11 +53,6 @@ const handler = toolbarNotifications => async () => {
     processEventRPC({
         type: EVENT_NAMES.POWERSEARCH_BROWSE_PAGE,
     })
-
-    await utils.setOnboardingStage(
-        FLOWS.powerSearch,
-        STAGES.powerSearch.overviewTooltips,
-    )
 }
 
 /**
@@ -71,14 +64,13 @@ export const conditionallyShowOnboardingNotifications = async ({
     toolbarNotifications,
 }) => {
     /*
-    Fetch shouldShowOnboarding and return if it's false as 
+    Fetch shouldShowOnboarding and return if it's false as
     that would mean the user has closed the onboarding demo.
     */
     const shouldShowOnboarding = await getLocalStorage(
         STORAGE_KEYS.shouldShowOnboarding,
         true,
     )
-    console.log(utils.isDemoPage(), shouldShowOnboarding)
     if (!utils.isDemoPage() || !shouldShowOnboarding) {
         return
     }
@@ -104,32 +96,24 @@ export const conditionallyShowOnboardingNotifications = async ({
             position,
             triggerNextNotification: handler(toolbarNotifications),
         })
-        await utils.setOnboardingStage(
-            FLOWS.powerSearch,
-            STAGES.powerSearch.notifiedBrowsePage,
-        )
     }
 
     if (taggingStage === STAGES.redirected) {
         toolbarNotifications.showToolbarNotification('tag-this-page')
-        await utils.setOnboardingStage(
-            FLOWS.tagging,
-            STAGES.tagging.notifiedTagPage,
-        )
     }
 }
 
 /**
- * Conditionally removes the Select Option notifcation in Annotation
+ * Conditionally removes the Select Option notification in Annotation
  * Onboarding Flow. Either used when user clicks outside or an annotation
  * is created.
  * @param nextStage Next stage to set for annotations flow
  */
-export const conditionallyRemoveSelectOption = async nextStage => {
+export const conditionallyRemoveOnboardingSelectOption = async nextStage => {
     const annotationStage = await utils.fetchOnboardingStage(FLOWS.annotation)
     if (annotationStage === STAGES.annotation.notifiedSelectOption) {
         await utils.setOnboardingStage(FLOWS.annotation, nextStage)
-        // Close the curren select-option notification manually since
+        // Close the current select-option notification manually since
         // accessing the toolbarNotification instance from here is not possible
         destroyRootElement()
     }

@@ -6,10 +6,8 @@ import { getExtURL } from '../utils.js'
 const styles = require('./notifications.css')
 
 const images = {
-    notifIcon: getExtURL('img/tooltipIcon_blue.svg'),
-    brainIcon: getExtURL('/img/worldbrain-logo-narrow-bw-48.png'),
-    arrowUp: getExtURL('/img/notifArrowUp.svg'),
-    closeIcon: getExtURL('/img/cross.svg'),
+    arrow: getExtURL('/img/arrowUp.svg'),
+    logo: getExtURL('/img/worldbrain-logo-narrow-bw-48.png'),
 }
 
 export default function GoToDashboard({ onCloseRequested }) {
@@ -17,15 +15,13 @@ export default function GoToDashboard({ onCloseRequested }) {
         <div className={styles.title}>
             {/* <img className={styles.notifIcon} src={images.notifIcon}/> */}
             <NotificationLayout
-                title={'Go back to the search Dashboard'}
-                icon={images.notifIcon}
+                title={'Go back to the search dashboard'}
                 onCloseRequested={onCloseRequested}
-                thirdRowImage={images.arrowUp}
-                closeIcon={images.closeIcon}
+                thirdRowImage={images.arrow}
             >
                 Via the little{' '}
-                <img src={images.brainIcon} className={styles.icon} /> icon in
-                the menu
+                <span className={styles.logo}/> icon in
+                the browser menu
             </NotificationLayout>
         </div>
     )

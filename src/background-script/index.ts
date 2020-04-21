@@ -1,39 +1,76 @@
-import { browser } from 'webextension-polyfill-ts'
+import Storex from '@worldbrain/storex'
+import {
+    browser,
+    Alarms,
+    Runtime,
+    Commands,
+    Storage,
+} from 'webextension-polyfill-ts'
+import { URLNormalizer, normalizeUrl } from '@worldbrain/memex-url-utils'
 
 import * as utils from './utils'
-import { UNINSTALL_URL } from './constants'
+import ActivityLoggerBackground from 'src/activity-logger/background'
 import NotifsBackground from '../notifications/background'
 import { onInstall, onUpdate } from './on-install-hooks'
 import { makeRemotelyCallable } from '../util/webextensionRPC'
 import { USER_ID } from '../util/generate-token'
-import {
-    storageChangesManager,
-    StorageChangesManager,
-} from '../util/storage-changes'
+import { StorageChangesManager } from '../util/storage-changes'
+import { migrations } from './quick-and-dirty-migrations'
+import { AlarmsConfig } from './alarms'
+import { fetchUserId } from 'src/analytics/utils'
 
 class BackgroundScript {
     private utils: typeof utils
     private notifsBackground: NotifsBackground
+    private activityLoggerBackground: ActivityLoggerBackground
     private storageChangesMan: StorageChangesManager
+    private storageManager: Storex
+    private urlNormalizer: URLNormalizer
+    private storageAPI: Storage.Static
+    private runtimeAPI: Runtime.Static
+    private commandsAPI: Commands.Static
+    private alarmsAPI: Alarms.Static
+    private alarmsListener
 
     constructor({
+        storageManager,
         notifsBackground,
+        loggerBackground,
         utilFns = utils,
-        storageChangesMan = storageChangesManager,
+        storageChangesMan,
+        urlNormalizer = normalizeUrl,
+        storageAPI = browser.storage,
+        runtimeAPI = browser.runtime,
+        commandsAPI = browser.commands,
+        alarmsAPI = browser.alarms,
     }: {
+        storageManager: Storex
         notifsBackground: NotifsBackground
+        loggerBackground: ActivityLoggerBackground
+        urlNormalizer?: URLNormalizer
         utilFns?: typeof utils
-        storageChangesMan?: StorageChangesManager
+        storageChangesMan: StorageChangesManager
+        storageAPI?: Storage.Static
+        runtimeAPI?: Runtime.Static
+        commandsAPI?: Commands.Static
+        alarmsAPI?: Alarms.Static
     }) {
+        this.storageManager = storageManager
         this.notifsBackground = notifsBackground
+        this.activityLoggerBackground = loggerBackground
         this.utils = utilFns
         this.storageChangesMan = storageChangesMan
+        this.storageAPI = storageAPI
+        this.runtimeAPI = runtimeAPI
+        this.commandsAPI = commandsAPI
+        this.alarmsAPI = alarmsAPI
+        this.urlNormalizer = urlNormalizer
     }
 
     get defaultUninstallURL() {
         return process.env.NODE_ENV === 'production'
             ? 'http://worldbrain.io/uninstall'
-            : ''
+            : 'http://worldbrain.io/uninstall'
     }
 
     /**
@@ -41,7 +78,7 @@ class BackgroundScript {
      * https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/commands
      */
     private setupCommands() {
-        browser.commands.onCommand.addListener(command => {
+        this.commandsAPI.onCommand.addListener(command => {
             switch (command) {
                 case 'openOverview':
                     return this.utils.openOverview()
@@ -55,13 +92,15 @@ class BackgroundScript {
      * https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/runtime/onInstalled
      */
     private setupInstallHooks() {
-        browser.runtime.onInstalled.addListener(details => {
+        this.runtimeAPI.onInstalled.addListener(details => {
+            this.notifsBackground.deliverStaticNotifications()
+            this.activityLoggerBackground.trackExistingTabs()
+
             switch (details.reason) {
                 case 'install':
-                    this.notifsBackground.deliverStaticNotifications()
                     return onInstall()
                 case 'update':
-                    this.notifsBackground.deliverStaticNotifications()
+                    this.runQuickAndDirtyMigrations()
                     return onUpdate()
                 default:
             }
@@ -69,17 +108,46 @@ class BackgroundScript {
     }
 
     /**
+     * Run all the quick and dirty migrations we have set up to run directly on Dexie.
+     */
+    private async runQuickAndDirtyMigrations() {
+        for (const [storageKey, migration] of Object.entries(migrations)) {
+            const storage = await this.storageAPI.local.get(storageKey)
+
+            if (storage[storageKey]) {
+                continue
+            }
+
+            await migration({
+                db: this.storageManager.backend['dexieInstance'],
+                normalizeUrl: this.urlNormalizer,
+            })
+            await this.storageAPI.local.set({ [storageKey]: true })
+        }
+    }
+
+    /**
      * Set up URL to open on extension uninstall.
      * https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/runtime/setUninstallURL
      */
     private setupUninstallURL() {
-        browser.runtime.setUninstallURL(this.defaultUninstallURL)
+        this.runtimeAPI.setUninstallURL(this.defaultUninstallURL)
+        setTimeout(async () => {
+            const userId = await fetchUserId()
+            this.runtimeAPI.setUninstallURL(
+                `${this.defaultUninstallURL}?user=${userId}`,
+            )
+        }, 1000)
 
         this.storageChangesMan.addListener('local', USER_ID, ({ newValue }) =>
-            browser.runtime.setUninstallURL(
-                `${UNINSTALL_URL}?user=${newValue}`,
+            this.runtimeAPI.setUninstallURL(
+                `${this.defaultUninstallURL}?user=${newValue}`,
             ),
         )
+    }
+
+    sendNotification(notifId: string) {
+        return this.notifsBackground.dispatchNotification(notifId)
     }
 
     setupRemoteFunctions() {
@@ -94,6 +162,31 @@ class BackgroundScript {
         this.setupInstallHooks()
         this.setupCommands()
         this.setupUninstallURL()
+    }
+
+    setupAlarms(alarms: AlarmsConfig) {
+        const alarmListeners = new Map()
+
+        for (const [name, { listener, ...alarmInfo }] of Object.entries(
+            alarms,
+        )) {
+            this.alarmsAPI.create(name, alarmInfo)
+            alarmListeners.set(name, listener)
+        }
+
+        this.alarmsListener = ({ name }) => {
+            const listener = alarmListeners.get(name)
+            if (typeof listener === 'function') {
+                listener(this)
+            }
+        }
+
+        this.alarmsAPI.onAlarm.addListener(this.alarmsListener)
+    }
+
+    clearAlarms() {
+        this.alarmsAPI.clearAll()
+        this.alarmsAPI.onAlarm.removeListener(this.alarmsListener)
     }
 }
 
