@@ -14,7 +14,6 @@ export const fontSizeBigger = 18
 export const fontSizeTitle = 20
 export const fontSizeBiggerTitle = 22
 
-
 export const TypographyBigTitle = styled.span`
     font-size: ${fontSizeTitle}px;
 
@@ -136,7 +135,7 @@ export const TypographyTextSmall = styled.span`
 
 export const TypographyInputTitle = styled.h2`
     font-family: 'Poppins', sans-serif;
-    font-size: ${fontSizeBigger}px;
+    font-size: ${fontSizeBig}px;
     font-weight: bold;
     box-sizing: border-box;
     margin-bottom: 5px;
