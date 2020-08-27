@@ -3,6 +3,15 @@ import cx from 'classnames'
 
 import AnnotationBox from 'src/sidebar-overlay/annotation-box'
 import { Annotation as AnnotationFlawed } from 'src/annotations/types'
+import {
+    AnnotationSharingInfo,
+    AnnotationSharingAccess,
+} from 'src/content-sharing/ui/types'
+import {
+    collections,
+    contentSharing,
+    auth,
+} from 'src/util/remote-functions-background'
 
 const styles = require('./annotation-list.css')
 
@@ -27,6 +36,10 @@ export interface Props {
     handleBookmarkToggle: (url: string) => void
 }
 
+interface SharingInfo {
+    [annotationUrl: string]: AnnotationSharingInfo
+}
+
 interface State {
     /** Boolean to denote whether the list is expanded or not */
     isExpanded: boolean
@@ -34,15 +47,23 @@ interface State {
     prevIsExpandedOverride: boolean
     /** Received annotations are stored and manipulated through edit/delete */
     annotations: Annotation[]
+    annotationsSharingInfo: SharingInfo
+    sharingAccess: AnnotationSharingAccess
 }
 
 class AnnotationList extends Component<Props, State> {
+    private authBG = auth
+    private customListsBG = collections
+    private contentShareBG = contentSharing
+
     state: State = {
         /* The initial value is set to the isExpandedOverride which is
         fetched from localStorage. */
         isExpanded: this.props.isExpandedOverride,
         prevIsExpandedOverride: this.props.isExpandedOverride,
         annotations: this.props.annotations,
+        sharingAccess: 'feature-disabled',
+        annotationsSharingInfo: {},
     }
 
     /**
@@ -59,6 +80,63 @@ class AnnotationList extends Component<Props, State> {
         }
         return state
     }
+
+    async componentDidMount() {
+        await this.detectPageSharingStatus()
+        await this.detectSharedAnnotations()
+    }
+
+    private async detectPageSharingStatus() {
+        if (!(await this.authBG.isAuthorizedForFeature('beta'))) {
+            this.setState(() => ({ sharingAccess: 'feature-disabled' }))
+            return
+        }
+
+        const listIds = await this.customListsBG.fetchListIdsByUrl({
+            url: this.props.pageUrl,
+        })
+        const areListsShared = await this.contentShareBG.areListsShared({
+            localListIds: listIds,
+        })
+
+        const isPageSharedOnSomeList = Object.values(areListsShared).reduce(
+            (val, acc) => acc || val,
+            false,
+        )
+
+        this.setState(() => ({
+            sharingAccess: isPageSharedOnSomeList
+                ? 'sharing-allowed'
+                : 'page-not-shared',
+        }))
+    }
+
+    private async detectSharedAnnotations() {
+        const annotationSharingInfo: SharingInfo = {}
+        const annotationUrls = this.props.annotations.map((a) => a.url)
+        const remoteIds = await this.contentShareBG.getRemoteAnnotationIds({
+            annotationUrls,
+        })
+        for (const localId of Object.keys(remoteIds)) {
+            annotationSharingInfo[localId] = {
+                status: 'shared',
+                taskState: 'pristine',
+            }
+        }
+        this.setState(() => ({
+            annotationsSharingInfo: annotationSharingInfo,
+        }))
+    }
+
+    private updateAnnotationShareState = (annotationUrl: string) => (
+        info: AnnotationSharingInfo,
+    ) =>
+        this.setState((state) => ({
+            annotationsSharingInfo: {
+                ...state.annotationsSharingInfo,
+                [annotationUrl]: info,
+            },
+        }))
 
     private toggleIsExpanded = () => {
         this.setState(
@@ -148,6 +226,7 @@ class AnnotationList extends Component<Props, State> {
             <AnnotationBox
                 env="overview"
                 key={annot.url}
+                pageUrl={this.props.pageUrl}
                 className={styles.annotation}
                 handleGoToAnnotation={this.handleGoToAnnotation(annot)}
                 handleDeleteAnnotation={this.handleDeleteAnnotation}
@@ -157,6 +236,9 @@ class AnnotationList extends Component<Props, State> {
                 hasBookmark={annot.hasBookmark}
                 lastEdited={annot.lastEdited?.valueOf()}
                 createdWhen={annot.createdWhen?.valueOf()}
+                sharingAccess={this.state.sharingAccess}
+                sharingInfo={this.state.annotationsSharingInfo[annot.url]}
+                updateSharingInfo={this.updateAnnotationShareState(annot.url)}
             />
         ))
     }
