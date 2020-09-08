@@ -44,14 +44,13 @@ export const SecondaryAction = ({
     onClick,
     disabled,
 }: {
-    label: string
+    label: React.ReactNode
     disabled?: boolean
     onClick: () => void
 }) => (
     <StyledSecondaryAction
         onClick={disabled === true ? undefined : onClick}
         disabled={disabled}
-        key={`button-${label}`}
     >
         <StyledSecondaryActionLinkText>{label}</StyledSecondaryActionLinkText>
     </StyledSecondaryAction>

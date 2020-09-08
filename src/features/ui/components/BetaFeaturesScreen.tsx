@@ -14,6 +14,11 @@ import { AuthContextInterface } from 'src/authentication/background/types'
 import { connect } from 'react-redux'
 import { show } from 'src/overview/modals/actions'
 import { PrimaryButton } from 'src/common-ui/components/primary-button'
+import { auth, subscription } from 'src/util/remote-functions-background'
+
+import { PrimaryAction } from 'src/common-ui/components/design-library/actions/PrimaryAction'
+import { SecondaryAction } from 'src/common-ui/components/design-library/actions/SecondaryAction'
+import LoadingIndicator from 'src/common-ui/components/LoadingIndicator'
 
 const settingsStyle = require('src/options/settings/components/settings.css')
 import {
@@ -30,6 +35,7 @@ interface Props {
 interface State {
     featureOptions: UserBetaFeature[]
     featureEnabled: { [key in UserBetaFeatureId]: boolean }
+    loadingChargebee: boolean
 }
 
 class BetaFeaturesScreen extends React.Component<
@@ -39,10 +45,22 @@ class BetaFeaturesScreen extends React.Component<
     state = {
         featureOptions: {},
         featureEnabled: {},
+        loadingChargebee: false,
     } as State
 
     componentDidMount = async () => {
         await this.refreshFeatures()
+    }
+
+    openPortal = async () => {
+        this.setState({
+            loadingChargebee: true,
+        })
+        const portalLink = await subscription.getManageLink()
+        window.open(portalLink['access_url'])
+        this.setState({
+            loadingChargebee: false,
+        })
     }
 
     refreshFeatures = async () => {
@@ -66,6 +84,28 @@ class BetaFeaturesScreen extends React.Component<
         await this.refreshFeatures()
     }
 
+    private renderUpgradeBtn() {
+        if (this.state.loadingChargebee) {
+            return (
+                <PrimaryAction
+                    label={<LoadingIndicator />}
+                    onClick={undefined}
+                />
+            )
+        }
+
+        return (
+            <PrimaryAction
+                label="Upgrade"
+                onClick={
+                    this.props.currentUser?.subscriptionStatus
+                        ? this.openPortal
+                        : this.props.showSubscriptionModal
+                }
+            />
+        )
+    }
+
     render() {
         return (
             <div>
@@ -79,51 +119,37 @@ class BetaFeaturesScreen extends React.Component<
                             {this.props.currentUser?.authorizedFeatures?.includes(
                                 'beta',
                             ) ? (
-                                <div>
-                                    <TypographyTextNormal>
-                                        Thanks so much for your support. Without
-                                        you this would not be possible! <br />
-                                        If you run into issues with Beta
-                                        features,{' '}
-                                        <a href="http://worldbrain.io/feedback/betafeatures">
-                                            let us know
-                                        </a>
-                                        .
-                                    </TypographyTextNormal>
-                                </div>
+                                <TypographyTextNormal>
+                                    Thanks so much for your support. Without
+                                    you this would not be possible! <br />
+                                    If you run into issues with Beta
+                                    features,{' '}
+                                    <a href="http://worldbrain.io/feedback/betafeatures">
+                                        let us know
+                                    </a>
+                                    .
+                                </TypographyTextNormal>
                             ) : (
-                                <div>
-                                    <TypographyTextNormal>
-                                        To access beta features you can support us by
-                                        <TypographyLink
-                                            onClick={
-                                                this.props.showSubscriptionModal
-                                            }
-                                        >
-                                            upgrading to the Pioneer Plan
-                                        </TypographyLink>
-                                           or
-                                        <TypographyLink
-                                            onClick={
-                                                ()=>{window.open('https://worldbrain.io/request-early-access')}
-                                            }
-                                        >
-                                            request free access via a wait list.
-                                        </TypographyLink>  
-                                    </TypographyTextNormal>
-                                </div>
+                                <TypographyTextNormal>
+                                    To access beta features by adding the Pioneer Plan Addon to your subscription or request free access via the 
+                                    <TypographyLink onClick={()=> window.open("https://worldbrain.io/beta")}>wait list.</TypographyLink> 
+                                </TypographyTextNormal>
                             )}
                         </div>
-                        <PrimaryButton
-                            onClick={() =>
-                                window.open(
-                                    'https://worldbrain.io/feedback/betafeatures',
-                                )
-                            }
-                        >
-                            Send Feedback
-                        </PrimaryButton>
+                        <div className={settingsStyle.buttonBox}>
+                            {this.renderUpgradeBtn()}
+                            <SecondaryAction
+                                onClick={() =>
+                                    window.open(
+                                        'https://worldbrain.io/feedback/betafeatures',
+                                    )
+                                }
+                                label={'Send Feedback'}
+                            />
+                        </div>
                     </div>
+                </section>
+                <section>
                     <div className={settingsStyle.titleSpace}>
                         <TypographyHeadingBig>
                             Available Beta Features

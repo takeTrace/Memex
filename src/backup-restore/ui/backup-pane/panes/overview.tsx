@@ -13,6 +13,8 @@ import { SecondaryAction } from 'src/common-ui/components/design-library/actions
 import { connect } from 'react-redux'
 import { show } from 'src/overview/modals/actions'
 import { AuthContextInterface } from 'src/authentication/background/types'
+import LoadingIndicator from 'src/common-ui/components/LoadingIndicator'
+import { auth, subscription } from 'src/util/remote-functions-background'
 
 const styles = require('../../styles.css')
 const settingsStyle = require('src/options/settings/components/settings.css')
@@ -45,6 +47,7 @@ export class OverviewContainer extends Component<Props & AuthContextInterface> {
         billingPeriod: null,
         subscribeModal: false,
         backupPath: null,
+        loadingChargebee: false,
     }
 
     async componentDidMount() {
@@ -73,6 +76,17 @@ export class OverviewContainer extends Component<Props & AuthContextInterface> {
         })
     }
 
+    openPortal = async () => {
+        this.setState({
+            loadingChargebee: true,
+        })
+        const portalLink = await subscription.getManageLink()
+        window.open(portalLink['access_url'])
+        this.setState({
+            loadingChargebee: false,
+        })
+    }
+
     handleToggle = () => {
         const blobPreference = !this.state.blobPreference
         this.props.onBlobPreferenceChange(blobPreference)
@@ -95,6 +109,28 @@ export class OverviewContainer extends Component<Props & AuthContextInterface> {
     disableAutomaticBackup() {
         localStorage.setItem('backup.automatic-backups-enabled', 'false')
         this.setState({ automaticBackupEnabled: false })
+    }
+
+    private renderUpgradeBtn() {
+        if (this.state.loadingChargebee) {
+            return (
+                <SecondaryAction
+                    label={<LoadingIndicator />}
+                    onClick={undefined}
+                />
+            )
+        }
+
+        return (
+            <SecondaryAction
+                label="⭐️ Upgrade"
+                onClick={
+                    this.props.currentUser?.subscriptionStatus
+                        ? this.openPortal
+                        : this.props.showSubscriptionModal
+                }
+            />
+        )
     }
 
     render() {
@@ -233,10 +269,9 @@ export class OverviewContainer extends Component<Props & AuthContextInterface> {
                                         data every 15 minutes.
                                     </span>
                                 </div>
-                                <SecondaryAction
-                                    onClick={this.openSubscriptionModal}
-                                    label={'⭐️ Upgrade'}
-                                />
+                                <div className={settingsStyle.buttonBox}>
+                                    {this.renderUpgradeBtn()}
+                                </div>
                             </div>
                         )}
 

@@ -145,7 +145,7 @@ export class AccountInfo extends React.Component<Props & AuthContextInterface> {
                             </div>
                         )}
                         {user.subscriptionStatus &&
-                            user.subscriptionStatus !== 'in_trial' && (
+                            user.subscriptionStatus !== 'in_trial' && user.subscriptionStatus !== 'active' && (
                                 <div className={styles.section}>
                                     <TypographyInputTitle>
                                         {' '}
@@ -161,7 +161,7 @@ export class AccountInfo extends React.Component<Props & AuthContextInterface> {
                                         />
                                         <PrimaryButton
                                             onClick={
-                                                this.props.showSubscriptionModal
+                                                this.openPortal
                                             }
                                         >
                                             {'Reactivate'}
