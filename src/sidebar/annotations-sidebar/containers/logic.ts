@@ -8,7 +8,6 @@ import { Anchor } from 'src/highlighting/types'
 import { loadInitial, executeUITask } from 'src/util/ui-logic'
 import { SidebarContainerDependencies } from './types'
 import { AnnotationsSidebarInPageEventEmitter } from '../types'
-import { featuresBeta } from 'src/util/remote-functions-background'
 import { AnnotationMode } from 'src/sidebar/annotations-sidebar/types'
 import { DEF_RESULT_LIMIT } from '../constants'
 import { IncomingAnnotationData } from 'src/in-page-ui/shared-state/types'
@@ -17,7 +16,6 @@ import {
     getLastSharedAnnotationTimestamp,
     setLastSharedAnnotationTimestamp,
 } from 'src/annotations/utils'
-import createResolvable from '@josephg/resolvable'
 import {
     AnnotationSharingInfo,
     AnnotationSharingAccess,
@@ -38,6 +36,12 @@ export interface SidebarContainerState {
     showState: 'visible' | 'hidden'
 
     annotationSharingAccess: AnnotationSharingAccess
+    annotationSharingInfo: {
+        [annotationUrl: string]: AnnotationSharingInfo
+    }
+
+    showAllNotesCopyPaster: boolean
+    activeCopyPasterAnnotationId: string | undefined
 
     pageUrl?: string
     annotations: Annotation[]
@@ -45,9 +49,6 @@ export interface SidebarContainerState {
         [context in AnnotationEventContext]: {
             [annotationUrl: string]: AnnotationMode
         }
-    }
-    annotationSharingInfo: {
-        [annotationUrl: string]: AnnotationSharingInfo
     }
     activeAnnotationUrl: string | null
     hoverAnnotationUrl: string | null
@@ -62,33 +63,16 @@ export interface SidebarContainerState {
         [annotationUrl: string]: EditForm
     }
 
-    // deletePageConfirm: {
-    //     pageUrlToDelete?: string
-    //     // isDeletePageModalShown: boolean
-    // }
-
-    // searchValue: string
-    // pageType: PageType
-    // searchType: SearchType
-    // resultsSearchType: SearchType
     pageCount: number
     noResults: boolean
-    // isBadTerm: boolean
-    // resultsByUrl: ResultsByUrl
-    // resultsClusteredByDay: boolean
-    // annotsByDay: PageUrlsByDay
-
-    // Everything below here is temporary
 
     showCongratsMessage: boolean
     showClearFiltersBtn: boolean
     isSocialPost: boolean
-    isBetaEnabled: boolean
 
     // Filter sidebar props
     showFiltersSidebar: boolean
     showSocialSearch: boolean
-    // resultsSearchType: 'page' | 'notes' | 'social'
 
     annotCount?: number
 
@@ -103,6 +87,9 @@ export interface SidebarContainerState {
     isSocialSearch: boolean
     showAnnotationsShareModal: boolean
     showBetaFeatureNotifModal: boolean
+
+    showAllNotesShareMenu: boolean
+    activeShareMenuNoteId: string | undefined
 }
 
 export type SidebarContainerEvents = UIEvent<{
@@ -133,12 +120,10 @@ export type SidebarContainerEvents = UIEvent<{
         annotationUrl: string
     }
     updateTagsForNewComment: { added?: string; deleted?: string }
-    // updateTagsForResult: { added: string; deleted: string; url: string }
     updateListsForPageResult: { added?: string; deleted?: string; url: string }
     addNewPageCommentTag: { tag: string }
     deleteEditCommentTag: { tag: string; annotationUrl: string }
     deleteNewPageCommentTag: { tag: string }
-    // closeComments: null,
 
     receiveNewAnnotation: {
         annotationUrl: string
@@ -199,29 +184,30 @@ export type SidebarContainerEvents = UIEvent<{
     setPageUrl: { pageUrl: string }
 
     // Search
-    // enterSearchQuery: { searchQuery: string }
-    // changeSearchQuery: { searchQuery: string }
-    // togglePageType: null
-    // switchSearch: { changes: SearchTypeChange }
-    // clearAllFilters: null
-    // resetFilterPopups: null
-    // toggleShowFilters: null
-
     paginateSearch: null
     setAnnotationsExpanded: { value: boolean }
     toggleAllAnnotationsFold: null
     fetchSuggestedTags: null
     fetchSuggestedDomains: null
 
+    updateAnnotationShareInfo: {
+        annotationUrl: string
+        info: Partial<AnnotationSharingInfo>
+    }
+    updateAllAnnotationsShareInfo: {
+        info: AnnotationSharingInfo
+    }
+
     setAnnotationShareModalShown: { shown: boolean }
     setBetaFeatureNotifModalShown: { shown: boolean }
 
-    // Page search result interactions
-    // togglePageBookmark: { pageUrl: string }
-    // togglePageTagPicker: { pageUrl: string }
-    // togglePageListPicker: { pageUrl: string }
-    // togglePageAnnotationsView: { pageUrl: string; pageTitle?: string }
-    // resetPageAnnotationsView: null
+    setAllNotesCopyPasterShown: { shown: boolean }
+    setCopyPasterAnnotationId: { id: string }
+    resetCopyPasterAnnotationId: null
+
+    setAllNotesShareMenuShown: { shown: boolean }
+    setShareMenuNoteId: { id: string }
+    resetShareMenuNoteId: null
 }>
 export type AnnotationEventContext = 'pageAnnotations' | 'searchResults'
 
@@ -256,8 +242,6 @@ export class SidebarContainerLogic extends UILogic<
     SidebarContainerEvents
 > {
     private inPageEvents: AnnotationsSidebarInPageEventEmitter
-    _detectedPageSharingStatus: Promise<void>
-    _detectedSharedAnnotations = createResolvable()
 
     constructor(private options: SidebarContainerOptions) {
         super()
@@ -286,18 +270,11 @@ export class SidebarContainerLogic extends UILogic<
             annotationSharingInfo: {},
             annotationSharingAccess: 'feature-disabled',
 
+            showAllNotesCopyPaster: false,
+            activeCopyPasterAnnotationId: undefined,
+
             commentBox: { ...INIT_FORM_STATE },
             editForms: {},
-            // deletePageConfirm: {
-            //     pageUrlToDelete: undefined,
-            //     // isDeletePageModalShown: false,
-            // },
-
-            // pageType: 'all',
-            // pageType: 'page',
-            // searchType: 'notes',
-            // searchType: 'page',
-            // resultsSearchType: 'page',
 
             allAnnotationsExpanded: false,
             isSocialPost: false,
@@ -311,14 +288,8 @@ export class SidebarContainerLogic extends UILogic<
             showFiltersSidebar: false,
             showSocialSearch: false,
 
-            // searchValue: '',
             pageCount: 0,
             noResults: false,
-            // isBadTerm: false,
-            // resultsByUrl: {},
-            // resultsClusteredByDay: false,
-            // annotsByDay: {},
-
             annotCount: 0,
             shouldShowCount: false,
             isInvalidSearch: false,
@@ -327,9 +298,10 @@ export class SidebarContainerLogic extends UILogic<
             isSocialSearch: false,
             searchResultSkip: 0,
 
-            isBetaEnabled: false,
             showAnnotationsShareModal: false,
             showBetaFeatureNotifModal: false,
+            showAllNotesShareMenu: false,
+            activeShareMenuNoteId: undefined,
         }
     }
 
@@ -347,10 +319,8 @@ export class SidebarContainerLogic extends UILogic<
             if (this.options.pageUrl != null) {
                 await this._doSearch(previousState, { overwrite: true })
             }
-            if (this.options.pageUrl) {
-                this._detectPageSharingStatus(this.options.pageUrl)
-            }
-            // await this.loadBeta()
+
+            await this.loadBeta()
         })
     }
 
@@ -374,11 +344,13 @@ export class SidebarContainerLogic extends UILogic<
     }
 
     private async loadBeta() {
-        // Check if user is allowed for beta too
-        const copyPasterEnabled = await featuresBeta.getFeatureState(
-            'copy-paster',
-        )
-        this.emitMutation({ isBetaEnabled: { $set: copyPasterEnabled } })
+        const isAllowed = await this.options.auth.isAuthorizedForFeature('beta')
+
+        this.emitMutation({
+            annotationSharingAccess: {
+                $set: isAllowed ? 'sharing-allowed' : 'feature-disabled',
+            },
+        })
     }
 
     show: EventHandler<'show'> = async () => {
@@ -398,48 +370,8 @@ export class SidebarContainerLogic extends UILogic<
                 if (opts.overwrite && state.pageUrl != null) {
                     await this.options.annotationsCache.load(state.pageUrl)
                 }
-                // return this.doAnnotationSearch(state, opts)
             },
         )
-    }
-
-    private async doAnnotationSearch(
-        state: SidebarContainerState,
-        opts: { overwrite: boolean },
-    ) {
-        // this.options.annotationsCache.load()
-        // this.emitMutation({
-        //     annotations: { $set:  },
-        // })
-        // const annotations = await this.options.annotations.getAllAnnotationsByUrl(
-        //     {
-        //         base64Img: true,
-        //         url: state.pageUrl,
-        //         skip: state.searchResultSkip,
-        //         limit: this.resultLimit,
-        //     },
-        // )
-        // if (opts.overwrite) {
-        //     this.emitMutation({
-        //         annotations: { $set: annotations },
-        //         editForms: { $set: createEditFormsForAnnotations(annotations) },
-        //         pageCount: { $set: annotations.length },
-        //         noResults: { $set: annotations.length < this.resultLimit },
-        //         searchResultSkip: { $set: 0 },
-        //     })
-        // } else {
-        //     this.emitMutation({
-        //         annotations: { $apply: (prev) => [...prev, ...annotations] },
-        //         editForms: {
-        //             $apply: (prev) => ({
-        //                 ...prev,
-        //                 ...createEditFormsForAnnotations(annotations),
-        //             }),
-        //         },
-        //         pageCount: { $apply: (prev) => prev + annotations.length },
-        //         noResults: { $set: annotations.length < this.resultLimit },
-        //     })
-        // }
     }
 
     paginateSearch: EventHandler<'paginateSearch'> = async ({
@@ -467,8 +399,70 @@ export class SidebarContainerLogic extends UILogic<
         this.emitMutation(mutation)
         const nextState = this.withMutation(previousState, mutation)
 
-        this._detectPageSharingStatus(event.pageUrl)
         return this._doSearch(nextState, { overwrite: true })
+    }
+
+    resetShareMenuNoteId: EventHandler<'resetShareMenuNoteId'> = ({}) => {
+        this.emitMutation({ activeShareMenuNoteId: { $set: undefined } })
+    }
+
+    setShareMenuNoteId: EventHandler<'setShareMenuNoteId'> = ({
+        event,
+        previousState,
+    }) => {
+        const newId =
+            previousState.activeShareMenuNoteId === event.id
+                ? undefined
+                : event.id
+
+        this.emitMutation({ activeShareMenuNoteId: { $set: newId } })
+    }
+
+    setAllNotesShareMenuShown: EventHandler<'setAllNotesShareMenuShown'> = ({
+        previousState,
+        event,
+    }) => {
+        if (previousState.annotationSharingAccess === 'feature-disabled') {
+            this.options.showBetaFeatureNotifModal?.()
+            return
+        }
+
+        this.emitMutation({
+            showAllNotesShareMenu: { $set: event.shown },
+        })
+    }
+
+    setAllNotesCopyPasterShown: EventHandler<'setAllNotesCopyPasterShown'> = ({
+        event,
+    }) => {
+        this.emitMutation({
+            showAllNotesCopyPaster: { $set: event.shown },
+            activeCopyPasterAnnotationId: { $set: undefined },
+        })
+    }
+
+    setCopyPasterAnnotationId: EventHandler<'setCopyPasterAnnotationId'> = ({
+        event,
+        previousState,
+    }) => {
+        const newId =
+            previousState.activeCopyPasterAnnotationId === event.id
+                ? undefined
+                : event.id
+
+        this.emitMutation({
+            activeCopyPasterAnnotationId: { $set: newId },
+            showAllNotesCopyPaster: { $set: false },
+        })
+    }
+
+    resetCopyPasterAnnotationId: EventHandler<
+        'resetCopyPasterAnnotationId'
+    > = () => {
+        this.emitMutation({
+            showAllNotesCopyPaster: { $set: false },
+            activeCopyPasterAnnotationId: { $set: undefined },
+        })
     }
 
     hide: EventHandler<'hide'> = () => {
@@ -836,56 +830,28 @@ export class SidebarContainerLogic extends UILogic<
         event,
         previousState,
     }) => {
-        const updateAnnotationTaskState = (taskState: TaskState) =>
-            this._updateAnnotationShareState(event.annotationUrl, {
-                status: 'shared',
-                taskState,
-            })
-
         if (previousState.annotationSharingAccess === 'feature-disabled') {
             this.options.showBetaFeatureNotifModal?.()
             return
         }
 
-        updateAnnotationTaskState('running')
-        try {
-            await this.options.contentSharing.shareAnnotation({
-                annotationUrl: event.annotationUrl,
-            })
-            updateAnnotationTaskState('success')
-            this.setLastSharedAnnotationTimestamp()
-        } catch (e) {
-            updateAnnotationTaskState('error')
-            throw e
-        }
+        this.emitMutation({
+            activeShareMenuNoteId: { $set: event.annotationUrl },
+        })
     }
 
     unshareAnnotation: EventHandler<'unshareAnnotation'> = async ({
         event,
         previousState,
     }) => {
-        const updateAnnotationTaskState = (taskState: TaskState) =>
-            this._updateAnnotationShareState(event.annotationUrl, {
-                status: 'unshared',
-                taskState,
-            })
-
         if (previousState.annotationSharingAccess === 'feature-disabled') {
             this.options.showBetaFeatureNotifModal?.()
             return
         }
 
-        updateAnnotationTaskState('running')
-        try {
-            // await new Promise(resolve => { })
-            await this.options.contentSharing.unshareAnnotation({
-                annotationUrl: event.annotationUrl,
-            })
-            updateAnnotationTaskState('success')
-        } catch (e) {
-            updateAnnotationTaskState('error')
-            throw e
-        }
+        this.emitMutation({
+            activeShareMenuNoteId: { $set: event.annotationUrl },
+        })
     }
 
     toggleAnnotationBookmark: EventHandler<
@@ -996,37 +962,6 @@ export class SidebarContainerLogic extends UILogic<
         this.emitMutation({ showBetaFeatureNotifModal: { $set: event.shown } })
     }
 
-    _detectPageSharingStatus(pageUrl: string) {
-        this._detectedPageSharingStatus = (async () => {
-            if (!(await this.options.auth.isAuthorizedForFeature('beta'))) {
-                this.emitMutation({
-                    annotationSharingAccess: { $set: 'feature-disabled' },
-                })
-                return
-            }
-
-            const listIds = await this.options.customLists.fetchListIdsByUrl({
-                url: pageUrl,
-            })
-            const areListsShared = await this.options.contentSharing.areListsShared(
-                { localListIds: listIds },
-            )
-
-            const isPageSharedOnSomeList = Object.values(areListsShared).reduce(
-                (val, acc) => acc || val,
-                false,
-            )
-
-            this.emitMutation({
-                annotationSharingAccess: {
-                    $set: isPageSharedOnSomeList
-                        ? 'sharing-allowed'
-                        : 'page-not-shared',
-                },
-            })
-        })()
-    }
-
     async _detectSharedAnnotations(annotationUrls: string[]) {
         const annotationSharingInfo: UIMutation<
             SidebarContainerState['annotationSharingInfo']
@@ -1034,6 +969,7 @@ export class SidebarContainerLogic extends UILogic<
         const remoteIds = await this.options.contentSharing.getRemoteAnnotationIds(
             { annotationUrls },
         )
+
         for (const localId of Object.keys(remoteIds)) {
             annotationSharingInfo[localId] = {
                 $set: {
@@ -1042,20 +978,37 @@ export class SidebarContainerLogic extends UILogic<
                 },
             }
         }
-        this.emitMutation({
-            annotationSharingInfo,
-        })
+
+        this.emitMutation({ annotationSharingInfo })
     }
 
-    _updateAnnotationShareState = (
-        annotationUrl: string,
-        info: AnnotationSharingInfo,
-    ) =>
+    updateAllAnnotationsShareInfo: EventHandler<
+        'updateAllAnnotationsShareInfo'
+    > = ({ previousState: { annotations }, event }) => {
+        const sharingInfo = {}
+
+        for (const { url } of annotations) {
+            sharingInfo[url] = { ...event.info }
+        }
+
+        this.emitMutation({ annotationSharingInfo: { $set: sharingInfo } })
+    }
+
+    updateAnnotationShareInfo: EventHandler<'updateAnnotationShareInfo'> = ({
+        previousState: { annotationSharingInfo },
+        event,
+    }) => {
         this.emitMutation({
             annotationSharingInfo: {
-                [annotationUrl]: { $set: info },
+                $merge: {
+                    [event.annotationUrl]: {
+                        ...annotationSharingInfo[event.annotationUrl],
+                        ...event.info,
+                    },
+                },
             },
         })
+    }
 
     private async setLastSharedAnnotationTimestamp() {
         const lastShared = await getLastSharedAnnotationTimestamp()

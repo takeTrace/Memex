@@ -1,9 +1,14 @@
 import Storex from '@worldbrain/storex'
+
 import { bindMethod } from 'src/util/functions'
 import CopyPasterStorage from './storage'
 import { RemoteCopyPasterInterface } from './types'
 import { Template } from '../types'
 import { makeRemotelyCallable } from 'src/util/webextensionRPC'
+import generateTemplateDocs from '../template-doc-generation'
+import { joinTemplateDocs, analyzeTemplate } from '../utils'
+import ContentSharingBackground from 'src/content-sharing/background'
+import { getTemplateDataFetchers } from './template-data-fetchers'
 
 export default class CopyPasterBackground {
     storage: CopyPasterStorage
@@ -12,6 +17,14 @@ export default class CopyPasterBackground {
     constructor(
         private options: {
             storageManager: Storex
+            contentSharing: Pick<
+                ContentSharingBackground,
+                | 'shareAnnotations'
+                | 'shareAnnotationsToLists'
+                | 'sharePage'
+                | 'storage'
+                | 'ensureRemotePageId'
+            >
         },
     ) {
         // makes the custom copy paster table in indexed DB
@@ -20,10 +33,11 @@ export default class CopyPasterBackground {
         })
 
         this.remoteFunctions = {
-            createTemplate: bindMethod(this, 'createTemplate'),
             findTemplate: bindMethod(this, 'findTemplate'),
+            createTemplate: bindMethod(this, 'createTemplate'),
             updateTemplate: bindMethod(this, 'updateTemplate'),
             deleteTemplate: bindMethod(this, 'deleteTemplate'),
+            renderTemplate: bindMethod(this, 'renderTemplate'),
             findAllTemplates: bindMethod(this, 'findAllTemplates'),
         }
 
@@ -48,5 +62,24 @@ export default class CopyPasterBackground {
 
     async findAllTemplates() {
         return this.storage.findAllTemplates()
+    }
+
+    async renderTemplate({
+        id,
+        annotationUrls,
+        normalizedPageUrls,
+    }: {
+        id: number
+        annotationUrls: string[]
+        normalizedPageUrls: string[]
+    }) {
+        const template = await this.storage.findTemplate({ id })
+        const templateDocs = await generateTemplateDocs({
+            annotationUrls,
+            normalizedPageUrls,
+            templateAnalysis: analyzeTemplate(template),
+            dataFetchers: getTemplateDataFetchers(this.options),
+        })
+        return joinTemplateDocs(templateDocs, template)
     }
 }

@@ -5,22 +5,34 @@ import {
     Runtime,
     Commands,
     Storage,
+    Tabs,
 } from 'webextension-polyfill-ts'
 import { URLNormalizer, normalizeUrl } from '@worldbrain/memex-url-utils'
 
 import * as utils from './utils'
 import ActivityLoggerBackground from 'src/activity-logger/background'
 import NotifsBackground from '../notifications/background'
-import { onInstall, onUpdate } from './on-install-hooks'
 import { makeRemotelyCallable } from '../util/webextensionRPC'
 import { StorageChangesManager } from '../util/storage-changes'
 import { migrations } from './quick-and-dirty-migrations'
 import { AlarmsConfig } from './alarms'
 import { generateUserId } from 'src/analytics/utils'
 import { STORAGE_KEYS } from 'src/analytics/constants'
+import CopyPasterBackground from 'src/copy-paster/background'
+import insertDefaultTemplates from 'src/copy-paster/background/default-templates'
+import { INSTALL_TIME_KEY, OVERVIEW_URL } from 'src/constants'
+import { SEARCH_INJECTION_KEY } from 'src/search-injection/constants'
+
+// TODO: pass these deps down via constructor
+import {
+    constants as blacklistConsts,
+    blacklist,
+} from 'src/blacklist/background'
+import analytics from 'src/analytics'
 
 class BackgroundScript {
     private utils: typeof utils
+    private copyPasterBackground: CopyPasterBackground
     private notifsBackground: NotifsBackground
     private activityLoggerBackground: ActivityLoggerBackground
     private storageChangesMan: StorageChangesManager
@@ -30,12 +42,14 @@ class BackgroundScript {
     private runtimeAPI: Runtime.Static
     private commandsAPI: Commands.Static
     private alarmsAPI: Alarms.Static
+    private tabsAPI: Tabs.Static
     private alarmsListener
 
     constructor({
         storageManager,
         notifsBackground,
         loggerBackground,
+        copyPasterBackground,
         utilFns = utils,
         storageChangesMan,
         urlNormalizer = normalizeUrl,
@@ -43,10 +57,12 @@ class BackgroundScript {
         runtimeAPI = browser.runtime,
         commandsAPI = browser.commands,
         alarmsAPI = browser.alarms,
+        tabsAPI = browser.tabs,
     }: {
         storageManager: Storex
         notifsBackground: NotifsBackground
         loggerBackground: ActivityLoggerBackground
+        copyPasterBackground: CopyPasterBackground
         urlNormalizer?: URLNormalizer
         utilFns?: typeof utils
         storageChangesMan: StorageChangesManager
@@ -54,16 +70,19 @@ class BackgroundScript {
         runtimeAPI?: Runtime.Static
         commandsAPI?: Commands.Static
         alarmsAPI?: Alarms.Static
+        tabsAPI?: Tabs.Static
     }) {
         this.storageManager = storageManager
         this.notifsBackground = notifsBackground
         this.activityLoggerBackground = loggerBackground
+        this.copyPasterBackground = copyPasterBackground
         this.utils = utilFns
         this.storageChangesMan = storageChangesMan
         this.storageAPI = storageAPI
         this.runtimeAPI = runtimeAPI
         this.commandsAPI = commandsAPI
         this.alarmsAPI = alarmsAPI
+        this.tabsAPI = tabsAPI
         this.urlNormalizer = urlNormalizer
     }
 
@@ -87,6 +106,44 @@ class BackgroundScript {
         })
     }
 
+    private async handleInstallLogic(now = Date.now()) {
+        // Ensure default blacklist entries are stored (before doing anything else)
+        await blacklist.addToBlacklist(blacklistConsts.DEF_ENTRIES)
+
+        analytics.trackEvent({ category: 'Global', action: 'installExtension' })
+
+        // Open onboarding page
+        this.tabsAPI.create({ url: `${OVERVIEW_URL}?install=true` })
+
+        // Store the timestamp of when the extension was installed
+        this.storageAPI.local.set({ [INSTALL_TIME_KEY]: now })
+        await insertDefaultTemplates({
+            copyPaster: this.copyPasterBackground,
+            localStorage: this.storageAPI.local,
+        })
+    }
+
+    private async handleUpdateLogic() {
+        // Check whether old Search Injection boolean exists and replace it with new object
+        const searchInjectionKey = (
+            await this.storageAPI.local.get(SEARCH_INJECTION_KEY)
+        )[SEARCH_INJECTION_KEY]
+
+        if (typeof searchInjectionKey === 'boolean') {
+            this.storageAPI.local.set({
+                [SEARCH_INJECTION_KEY]: {
+                    google: searchInjectionKey,
+                    duckduckgo: true,
+                },
+            })
+        }
+
+        await insertDefaultTemplates({
+            copyPaster: this.copyPasterBackground,
+            localStorage: this.storageAPI.local,
+        })
+    }
+
     /**
      * Set up logic that will get run on ext install, update, browser update.
      * https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/API/runtime/onInstalled
@@ -98,10 +155,10 @@ class BackgroundScript {
 
             switch (details.reason) {
                 case 'install':
-                    return onInstall()
+                    return this.handleInstallLogic()
                 case 'update':
                     await this.runQuickAndDirtyMigrations()
-                    return onUpdate()
+                    return this.handleUpdateLogic()
                 default:
             }
         })
@@ -134,7 +191,7 @@ class BackgroundScript {
     private setupUninstallURL() {
         this.runtimeAPI.setUninstallURL(this.defaultUninstallURL)
         setTimeout(async () => {
-            const userId = await generateUserId({})
+            const userId = await generateUserId({ storage: this.storageAPI })
             this.runtimeAPI.setUninstallURL(
                 `${this.defaultUninstallURL}?user=${userId}`,
             )

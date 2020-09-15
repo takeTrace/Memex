@@ -39,6 +39,7 @@ import {
     DevAuthState,
 } from 'src/authentication/background/setup'
 import { FeatureOptIns } from 'src/features/background/feature-opt-ins'
+import { FeaturesBeta } from 'src/features/background/feature-beta'
 import { PageFetchBacklogBackground } from 'src/page-fetch-backlog/background'
 import { ConnectivityCheckerBackground } from 'src/connectivity-checker/background'
 import { FetchPageProcessor } from 'src/page-analysis/background/types'
@@ -53,7 +54,7 @@ import { AnalyticsBackground } from 'src/analytics/background'
 import { Analytics } from 'src/analytics/types'
 import { subscriptionRedirect } from 'src/authentication/background/redirect'
 import { PipelineRes } from 'src/search'
-import CopyPasterBackground from 'src/overview/copy-paster/background'
+import CopyPasterBackground from 'src/copy-paster/background'
 import { ReaderBackground } from 'src/reader/background'
 import { ServerStorage } from 'src/storage/types'
 import ContentSharingBackground from 'src/content-sharing/background'
@@ -79,6 +80,7 @@ export interface BackgroundModules {
     contentScripts: ContentScriptsBackground
     inPageUI: InPageUIBackground
     features: FeatureOptIns
+    featuresBeta: FeaturesBeta
     pageFetchBacklog: PageFetchBacklogBackground
     storexHub: StorexHubBackground
     copyPaster: CopyPasterBackground
@@ -160,11 +162,22 @@ export function createBackgroundModules(options: {
     })
 
     const social = new SocialBackground({ storageManager })
-    const bgScript = new BackgroundScript({
+
+    const customLists = new CustomListBackground({
         storageManager,
-        storageChangesMan: options.localStorageChangesManager,
-        notifsBackground: notifications,
-        loggerBackground: activityLogger,
+        queryTabs: bindMethod(options.browserAPIs.tabs, 'query'),
+        windows: options.browserAPIs.windows,
+        searchIndex: search.searchIndex,
+        pageStorage: pages.storage,
+        localBrowserStorage: options.browserAPIs.storage.local,
+    })
+
+    const directLinking = new DirectLinkingBackground({
+        browserAPIs: options.browserAPIs,
+        storageManager,
+        socialBg: social,
+        searchIndex: search.searchIndex,
+        pageStorage: pages.storage,
     })
 
     const auth =
@@ -181,6 +194,29 @@ export function createBackgroundModules(options: {
                 (await options.getServerStorage()).storageModules
                     .userManagement,
         })
+
+    const contentSharing = new ContentSharingBackground({
+        storageManager,
+        customLists: customLists.storage,
+        annotationStorage: directLinking.annotationStorage,
+        auth,
+        analytics: options.analyticsManager,
+        getContentSharing: async () =>
+            (await options.getServerStorage()).storageModules.contentSharing,
+    })
+
+    const copyPaster = new CopyPasterBackground({
+        storageManager,
+        contentSharing,
+    })
+
+    const bgScript = new BackgroundScript({
+        storageManager,
+        storageChangesMan: options.localStorageChangesManager,
+        copyPasterBackground: copyPaster,
+        notifsBackground: notifications,
+        loggerBackground: activityLogger,
+    })
 
     const connectivityChecker = new ConnectivityCheckerBackground({
         xhr: new XMLHttpRequest(),
@@ -204,22 +240,6 @@ export function createBackgroundModules(options: {
           }).processor
         : undefined
 
-    const customLists = new CustomListBackground({
-        storageManager,
-        queryTabs: bindMethod(options.browserAPIs.tabs, 'query'),
-        windows: options.browserAPIs.windows,
-        searchIndex: search.searchIndex,
-        pageStorage: pages.storage,
-        localBrowserStorage: options.browserAPIs.storage.local,
-    })
-
-    const directLinking = new DirectLinkingBackground({
-        browserAPIs: options.browserAPIs,
-        storageManager,
-        socialBg: social,
-        searchIndex: search.searchIndex,
-        pageStorage: pages.storage,
-    })
     return {
         auth,
         social,
@@ -307,6 +327,7 @@ export function createBackgroundModules(options: {
             },
         }),
         features: new FeatureOptIns(),
+        featuresBeta: new FeaturesBeta(),
         pages,
         bgScript,
         pageFetchBacklog,
@@ -323,19 +344,8 @@ export function createBackgroundModules(options: {
                 'create',
             ),
         }),
-        copyPaster: new CopyPasterBackground({
-            storageManager,
-        }),
-        contentSharing: new ContentSharingBackground({
-            storageManager,
-            customLists: customLists.storage,
-            annotationStorage: directLinking.annotationStorage,
-            auth,
-            analytics: options.analyticsManager,
-            getContentSharing: async () =>
-                (await options.getServerStorage()).storageModules
-                    .contentSharing,
-        }),
+        copyPaster,
+        contentSharing,
     }
 }
 

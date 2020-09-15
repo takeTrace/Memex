@@ -44,6 +44,8 @@ export interface OwnProps {
     hasBookmark?: boolean
     sharingInfo: AnnotationSharingInfo
     sharingAccess: AnnotationSharingAccess
+    shareMenu: React.ReactNode
+    copyPasterManager: React.ReactNode
     updateSharingInfo: (info: AnnotationSharingInfo) => void
     handleGoToAnnotation: (e: React.MouseEvent<HTMLElement>) => void
     handleMouseEnter?: (e: Event) => void
@@ -51,6 +53,8 @@ export interface OwnProps {
     handleEditAnnotation: (url: string, comment: string, tags: string[]) => void
     handleDeleteAnnotation: (url: string) => void
     handleBookmarkToggle: (url: string) => void
+    handleCopyPasterClick?: () => void
+    openShareMenu?: () => void
 }
 
 interface DispatchProps {
@@ -100,53 +104,22 @@ class AnnotationBoxContainer extends React.Component<Props, State> {
         await setLastSharedAnnotationTimestamp()
     }
 
-    private shareAnnotation = async () => {
-        const updateState = (taskState: TaskState) =>
-            this.props.updateSharingInfo({
-                status: 'shared',
-                taskState,
-            })
-
+    private shareAnnotation: React.MouseEventHandler = async (e) => {
         if (this.props.sharingAccess === 'feature-disabled') {
             this.props.showBetaFeatureNotifModal()
             return
         }
 
-        updateState('running')
-        try {
-            await this.contentShareBG.shareAnnotation({
-                annotationUrl: this.props.url,
-            })
-            updateState('success')
-            this.setLastSharedTimestamp()
-        } catch (e) {
-            updateState('error')
-            throw e
-        }
+        this.props.openShareMenu()
     }
 
-    private unshareAnnotation = async () => {
-        const updateState = (taskState: TaskState) =>
-            this.props.updateSharingInfo({
-                status: 'unshared',
-                taskState,
-            })
-
+    private unshareAnnotation: React.MouseEventHandler = async (e) => {
         if (this.props.sharingAccess === 'feature-disabled') {
             this.props.showBetaFeatureNotifModal()
             return
         }
 
-        updateState('running')
-        try {
-            await this.contentShareBG.unshareAnnotation({
-                annotationUrl: this.props.url,
-            })
-            updateState('success')
-        } catch (e) {
-            updateState('error')
-            throw e
-        }
+        this.props.openShareMenu()
     }
 
     private get isEdited() {
@@ -251,10 +224,6 @@ class AnnotationBoxContainer extends React.Component<Props, State> {
         this._setDisplayCrowdfunding(true, 'clickShareButton')
     }
 
-    private _handleReplyIconClick = () => {
-        this._setDisplayCrowdfunding(true, 'clickReplyButton')
-    }
-
     private _handleCancelOperation = () => {
         this.setState({ mode: 'default' })
     }
@@ -333,6 +302,7 @@ class AnnotationBoxContainer extends React.Component<Props, State> {
                         shareIconClickHandler={this._handleShareIconClick}
                         getTruncatedTextObject={this._getTruncatedTextObject}
                         handleBookmarkToggle={this.handleBookmarkToggle}
+                        handleCopyPasterClick={this.props.handleCopyPasterClick}
                         {...shareAnnotationProps}
                     />
                 ) : (
@@ -342,9 +312,12 @@ class AnnotationBoxContainer extends React.Component<Props, State> {
                         tags={this.props.tags}
                         handleCancelOperation={this._handleCancelOperation}
                         handleEditAnnotation={this._handleEditAnnotation}
+                        handleCopyPasterClick={this.props.handleCopyPasterClick}
                         {...shareAnnotationProps}
                     />
                 )}
+                {this.props.shareMenu}
+                {this.props.copyPasterManager}
             </div>
         )
     }
@@ -355,7 +328,7 @@ const mapDispatchToProps: MapDispatchToProps<DispatchProps, OwnProps> = (
 ) => ({
     handleTagClick: (tag) => dispatch(filterActs.toggleTagFilter(tag)),
     showAnnotationShareModal: () =>
-        dispatch(show({ modalId: 'ShareAnnotationModal' })),
+        dispatch(show({ modalId: 'ShareAnnotationOnboardingModal' })),
     showBetaFeatureNotifModal: () =>
         dispatch(show({ modalId: 'BetaFeatureNotifModal', options: {} })),
 })

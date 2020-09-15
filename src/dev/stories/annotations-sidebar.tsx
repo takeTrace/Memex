@@ -67,6 +67,8 @@ async function createDependencies() {
     ]
 
     const sidebarDependencies: AnnotationsSidebarProps = {
+        renderShareMenuForAnnotation: () => null,
+        renderCopyPasterForAnnotation: () => null,
         sharingAccess: 'sharing-allowed',
         isAnnotationCreateShown: true,
         isSearchLoading: false,
@@ -96,6 +98,7 @@ async function createDependencies() {
             onEditIconClick: action('clickEditIcon'),
             toggleBookmark: action('toggleBookmark'),
             onGoToAnnotation: action('goToAnnotation'),
+            onCopyPasterBtnClick: action('clickCopyPaster'),
         }),
         bindAnnotationEditProps: (a) => ({
             comment: '',

@@ -1,6 +1,4 @@
 export type UserBetaFeatureId =
-    | 'reader'
-    | 'copy-paster'
     | 'pdf-annotations'
     | 'sharing-collections'
 
@@ -14,40 +12,32 @@ export interface UserBetaFeature {
 }
 const allFeatures: UserBetaFeature[] = [
     {
-        id: 'reader',
-        name: 'Offline-first Reader & Mobile Annotations',
-        description:
-            'Have local & clean-view copies of websites you read. Create annotations on your mobile phone',
-        link: 'https://worldbrain.io/projects/reader',
-        enabled: false,
-        available: false,
-    },
-    {
-        id: 'copy-paster',
-        name: 'Copy/Paste templates',
-        description:
-            'Create custom templates to copy pages and annotations into your own workflow',
-        link: 'https://worldbrain.io/projects/copy-paster',
-        enabled: true,
-        available: true,
-    },
-    {
-        id: 'sharing-collections',
-        name: 'Sharing Collections',
-        description: 'Share your collections with pages and (soon) annotations',
-        link: 'https://worldbrain.io/projects/shared-collections',
-        enabled: true,
-        available: true,
-    },
-    {
         id: 'pdf-annotations',
         name: 'PDF Annotations',
         description:
             'Annotate PDFs via the Memex extension (no phone support yet)',
-        link: 'https://worldbrain.io/projects/pdfannotations',
+        link: undefined,
         enabled: false,
         available: false,
     },
+    // {
+    //     id: 'reader',
+    //     name: 'Offline-first Reader & Mobile Annotations',
+    //     description:
+    //         'Have local & clean-view copies of websites you read. Create annotations on your mobile phone',
+    //     link: 'https://worldbrain.io/projects/reader',
+    //     enabled: false,
+    //     available: false,
+    // },
+    {
+        id: 'sharing-collections',
+        name: 'Sharing Collections & Annotations',
+        description: 'Easily share timeless repositories of quality content, feedback on articles, and create references to important text passages.',
+        link: 'https://worldbrain.io/tutorials/share-research',
+        enabled: true,
+        available: true,
+    },
+    
 ]
 
 export type UserBetaFeatureMap = {

@@ -36,6 +36,7 @@ import {
 import { show } from 'src/overview/modals/actions'
 import { ContentSharingInterface } from 'src/content-sharing/background/types'
 import { AuthRemoteFunctionsInterface } from 'src/authentication/background/types'
+import { FeaturesBetaInterface } from 'src/features/background/feature-beta'
 
 const styles = require('./overview.styles.css')
 const resultItemStyles = require('src/common-ui/components/result-item.css')
@@ -64,6 +65,7 @@ class Overview extends PureComponent<Props, State> {
     private contentSharingBG = runInBackground<ContentSharingInterface>()
     private tagsBG = runInBackground<RemoteTagsInterface>()
     private authBG = runInBackground<AuthRemoteFunctionsInterface>()
+    private featuresBetaBG = runInBackground<FeaturesBetaInterface>()
 
     private annotationsSidebarRef = React.createRef<
         AnnotationsSidebarContainer
@@ -207,10 +209,6 @@ class Overview extends PureComponent<Props, State> {
         }
     }
 
-    private handleCloseSidebarBtnClick: React.MouseEventHandler = (e) => {
-        this.annotationsSidebar.hideSidebar()
-    }
-
     handleOnboardingComplete = () => {
         window.location.href = OVERVIEW_URL
         this.props.setShowOnboardingMessage()
@@ -271,7 +269,6 @@ class Overview extends PureComponent<Props, State> {
                         refSidebar={this.annotationsSidebarRef}
                         annotationsCache={this.annotationsCache}
                         onClickOutside={this.handleClickOutsideSidebar}
-                        onCloseSidebarBtnClick={this.handleCloseSidebarBtnClick}
                         showAnnotationShareModal={
                             this.props.showAnnotationShareModal
                         }
@@ -282,21 +279,13 @@ class Overview extends PureComponent<Props, State> {
 
                     <Tooltip />
                     <div className={styles.rightCorner}>
-                        {this.state.showPioneer && (
-                            <div
-                                onClick={() => {
-                                    window.open('#/features')
-                                }}
-                                className={styles.pioneerBadge}
-                            >
-                                <ButtonTooltip
-                                    tooltipText="Thank you for supporting this journey 🙏"
-                                    position="top"
-                                >
-                                    🚀 Pioneer Edition
-                                </ButtonTooltip>
-                            </div>
-                        )}
+                        <a
+                            href="https://worldbrain.io/feedback"
+                            target="_blank"
+                            className={styles.feedbackButton}
+                        >
+                            🐞 Feedback
+                        </a>
                         {this.state.showUpgrade && (
                             <div
                                 onClick={this.props.showSubscriptionModal}
@@ -339,16 +328,12 @@ class Overview extends PureComponent<Props, State> {
 const mapStateToProps = (state) => ({})
 
 const mapDispatchToProps = (dispatch) => ({
-    init: () => {
-        featuresBeta.getFeatureState('copy-paster')
-        featuresBeta.getFeatureState('sharing-collections')
-        return dispatch(searchBarActs.init())
-    },
+    init: () => dispatch(searchBarActs.init()),
     setShowOnboardingMessage: () =>
         dispatch(resultActs.setShowOnboardingMessage(true)),
     showSubscriptionModal: () => dispatch(show({ modalId: 'Subscription' })),
     showAnnotationShareModal: () =>
-        dispatch(show({ modalId: 'ShareAnnotationModal' })),
+        dispatch(show({ modalId: 'ShareAnnotationOnboardingModal' })),
     showBetaFeatureNotifModal: () =>
         dispatch(show({ modalId: 'BetaFeatureNotifModal' })),
 })

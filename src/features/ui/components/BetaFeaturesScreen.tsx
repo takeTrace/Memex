@@ -30,6 +30,7 @@ import { acts as resultsActs } from 'src/overview/results'
 interface Props {
     showSubscriptionModal: () => void
     toggleBetaFeatures: (val: boolean) => void
+    showBetaFeatureNotifModal: () => void
 }
 
 interface State {
@@ -66,17 +67,13 @@ class BetaFeaturesScreen extends React.Component<
     refreshFeatures = async () => {
         const featureOptions = await featuresBeta.getFeatures()
         const featureEnabled = {
-            'copy-paster': true,
             'sharing-collections': true,
-            reader: false,
             'pdf-annotations': false,
         }
         Object.values(featureOptions).forEach(
             (f) => (featureEnabled[f.id] = f.enabled),
         )
         this.setState({ featureOptions, featureEnabled })
-        this.props.currentUser?.authorizedFeatures?.includes('beta') &&
-            this.props.toggleBetaFeatures(featureEnabled['copy-paster'])
     }
 
     toggleFeature = (feature) => async () => {
@@ -96,11 +93,12 @@ class BetaFeaturesScreen extends React.Component<
 
         return (
             <PrimaryAction
-                label="Upgrade"
-                onClick={
-                    this.props.currentUser?.subscriptionStatus
-                        ? this.openPortal
-                        : this.props.showSubscriptionModal
+                label="Request Access"
+                onClick={() => {
+                        window.open(
+                            'https://worldbrain.io/beta',
+                        )
+                    }
                 }
             />
         )
@@ -120,28 +118,35 @@ class BetaFeaturesScreen extends React.Component<
                                 'beta',
                             ) ? (
                                 <TypographyTextNormal>
-                                    Thanks so much for your support. Without
-                                    you this would not be possible! <br />
-                                    If you run into issues with Beta
-                                    features,{' '}
-                                    <a href="http://worldbrain.io/feedback/betafeatures">
-                                        let us know
-                                    </a>
-                                    .
+                                    You're signed up for using the beta features.<br/>
                                 </TypographyTextNormal>
                             ) : (
-                                <TypographyTextNormal>
-                                    To access beta features by adding the Pioneer Plan Addon to your subscription or request free access via the 
-                                    <TypographyLink onClick={()=> window.open("https://worldbrain.io/beta")}>wait list.</TypographyLink> 
-                                </TypographyTextNormal>
+                                <div>
+                                    <TypographyTextNormal>
+                                        Access beta features by
+                                        <TypographyLink
+                                            onClick={() => {
+                                                window.open(
+                                                    'https://worldbrain.io/beta',
+                                                )
+                                            }}
+                                        >
+                                            requesting free access via a wait list.
+                                        </TypographyLink>
+                                    </TypographyTextNormal>
+                                </div>
                             )}
                         </div>
                         <div className={settingsStyle.buttonBox}>
-                            {this.renderUpgradeBtn()}
+                            {!this.props.currentUser?.authorizedFeatures?.includes(
+                                'beta',
+                            ) && (
+                                this.renderUpgradeBtn()
+                            )}
                             <SecondaryAction
                                 onClick={() =>
                                     window.open(
-                                        'https://worldbrain.io/feedback/betafeatures',
+                                        'https://worldbrain.io/feedback',
                                     )
                                 }
                                 label={'Send Feedback'}
@@ -183,6 +188,7 @@ class BetaFeaturesScreen extends React.Component<
                                                     settingsStyle.buttonArea
                                                 }
                                             >
+                                            {feature.link &&
                                                 <div
                                                     className={
                                                         settingsStyle.readMoreButton
@@ -195,6 +201,7 @@ class BetaFeaturesScreen extends React.Component<
                                                 >
                                                     Read More
                                                 </div>
+                                                }
                                                 {this.props.currentUser?.authorizedFeatures?.includes(
                                                     'beta',
                                                 ) ? (
@@ -214,7 +221,7 @@ class BetaFeaturesScreen extends React.Component<
                                                         isChecked={false}
                                                         onChange={
                                                             this.props
-                                                                .showSubscriptionModal
+                                                                .showBetaFeatureNotifModal
                                                         }
                                                     />
                                                 )}
@@ -257,6 +264,7 @@ class BetaFeaturesScreen extends React.Component<
                                                         settingsStyle.buttonArea
                                                     }
                                                 >
+                                                {feature.link &&
                                                     <div
                                                         className={
                                                             settingsStyle.readMoreButton
@@ -269,6 +277,7 @@ class BetaFeaturesScreen extends React.Component<
                                                     >
                                                         Read More
                                                     </div>
+                                                }
                                                 </div>
                                             </div>
                                         </section>
@@ -285,4 +294,6 @@ class BetaFeaturesScreen extends React.Component<
 export default connect(null, (dispatch) => ({
     showSubscriptionModal: () => dispatch(show({ modalId: 'Subscription' })),
     toggleBetaFeatures: (val) => dispatch(resultsActs.setBetaFeatures(val)),
+    showBetaFeatureNotifModal: () =>
+        dispatch(show({ modalId: 'BetaFeatureNotifModal' })),
 }))(withCurrentUser(BetaFeaturesScreen))
