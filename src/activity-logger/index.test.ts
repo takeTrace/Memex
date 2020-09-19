@@ -16,6 +16,8 @@ describe('URL loggability tests', () => {
             { url: 'http://worldbrain.io/test#', shouldPass: true },
             { url: 'http://worldbrain.io/test/test_(test)', shouldPass: true },
             { url: 'http://worldbrain.io/test/test+test', shouldPass: true },
+            { url: 'http://worldbrain.io/test/test:test', shouldPass: true },
+            { url: 'http://worldbrain.io:550505/test/test', shouldPass: true },
             {
                 url:
                     'https://en.wikipedia.org/wiki/Theater_District,_Manhattan',
@@ -42,8 +44,10 @@ describe('URL loggability tests', () => {
             { url: 'https://worldbrain.io/test.png', shouldPass: false },
             { url: 'https://worldbrain.io/test.svg', shouldPass: false },
             { url: 'https://worldbrain.io/test.gif', shouldPass: false },
-            { url: 'https://about:config', shouldPass: false },
             { url: 'about:config', shouldPass: false },
+            { url: 'mailto:test@worldbrain.io', shouldPass: false },
+            { url: 'test@worldbrain.io', shouldPass: false },
+            { url: 'chrome://extensions', shouldPass: false },
             { url: 'worldbrain.com', shouldPass: false },
             { url: 'ftp://worldbrain.com', shouldPass: false },
         ]
