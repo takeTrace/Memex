@@ -1,18 +1,20 @@
 import { Runtime, WebNavigation, Tabs, Browser } from 'webextension-polyfill-ts'
 
-import { makeRemotelyCallableType } from 'src/util/webextensionRPC'
+import * as Raven from 'src/util/raven'
 import { mapChunks } from 'src/util/chunk'
+import { CONCURR_TAB_LOAD } from '../constants'
+import { makeRemotelyCallableType } from 'src/util/webextensionRPC'
 import initPauser, { getState as getPauseState } from './pause-logging'
 import { updateVisitInteractionData } from './util'
 import { TabManager } from './tab-manager'
 import { TabChangeListener, ActivityLoggerInterface } from './types'
 import TabChangeListeners from './tab-change-listeners'
 import PageVisitLogger from './log-page-visit'
-import { CONCURR_TAB_LOAD } from '../constants'
 import { SearchIndex } from 'src/search'
 import { bindMethod } from 'src/util/functions'
-import * as Raven from 'src/util/raven'
+import { resolvablePromise } from 'src/util/resolvable'
 import PageStorage from 'src/page-indexing/background/storage'
+import BookmarksBackground from 'src/bookmarks/background'
 
 export default class ActivityLoggerBackground {
     static SCROLL_UPDATE_FN = 'updateScrollState'
@@ -20,6 +22,7 @@ export default class ActivityLoggerBackground {
     tabManager: TabManager
     remoteFunctions: ActivityLoggerInterface
 
+    private bookmarksBG: BookmarksBackground
     private searchIndex: SearchIndex
     private tabsAPI: Tabs.Static
     private runtimeAPI: Runtime.Static
@@ -32,9 +35,10 @@ export default class ActivityLoggerBackground {
      * Used to stop of tab updated event listeners while the
      * tracking of existing tabs is happening.
      */
-    private tabQueryP = new Promise((resolve) => resolve())
+    private trackingExistingTabs = resolvablePromise()
 
     constructor(options: {
+        bookmarksBG: BookmarksBackground
         tabManager: TabManager
         searchIndex: SearchIndex
         pageStorage: PageStorage
@@ -43,6 +47,7 @@ export default class ActivityLoggerBackground {
             'tabs' | 'runtime' | 'webNavigation' | 'storage'
         >
     }) {
+        this.bookmarksBG = options.bookmarksBG
         this.tabManager = options.tabManager
         this.tabsAPI = options.browserAPIs.tabs
         this.runtimeAPI = options.browserAPIs.runtime
@@ -61,6 +66,7 @@ export default class ActivityLoggerBackground {
             tabManager: this.tabManager,
         })
         this.tabChangeListener = new TabChangeListeners({
+            tabsAPI: this.tabsAPI,
             tabManager: this.tabManager,
             searchIndex: options.searchIndex,
             pageVisitLogger: this.pageVisitLogger,
@@ -81,31 +87,23 @@ export default class ActivityLoggerBackground {
     }
 
     async trackExistingTabs() {
-        let resolveTabQueryP
-        this.tabQueryP = new Promise((resolve) => (resolveTabQueryP = resolve))
         const tabs = await this.tabsAPI.query({})
+        const tabBookmarks = await this.bookmarksBG.findTabBookmarks(tabs)
 
-        await mapChunks<Tabs.Tab>(
-            tabs,
-            CONCURR_TAB_LOAD,
-            async (browserTab) => {
-                this.tabManager.trackTab(browserTab, {
-                    isLoaded: ActivityLoggerBackground.isTabLoaded(browserTab),
-                    isBookmarked: await this.tabChangeListener.checkBookmark(
-                        browserTab.url,
-                    ),
+        await mapChunks(tabs, CONCURR_TAB_LOAD, async (tab) => {
+            this.tabManager.trackTab(tab, {
+                isLoaded: ActivityLoggerBackground.isTabLoaded(tab),
+                isBookmarked: tabBookmarks.get(tab.url),
+            })
+
+            await this.tabChangeListener
+                .injectContentScripts(tab)
+                .catch((err) => {
+                    Raven.captureException(err)
                 })
+        })
 
-                // NOTE: Important we don't wait on this, as the Promise won't resolve until the tab is activated - if we wait, the next chunk to map over may not happen
-                this.tabChangeListener._handleVisitIndexing(
-                    browserTab.id,
-                    browserTab,
-                    { skipStubLog: true },
-                )
-            },
-        )
-
-        resolveTabQueryP()
+        this.trackingExistingTabs.resolve()
     }
 
     private async trackNewTab(id: number) {
@@ -189,7 +187,7 @@ export default class ActivityLoggerBackground {
         changeInfo,
         tab,
     ) => {
-        await this.tabQueryP
+        await this.trackingExistingTabs
 
         if (changeInfo.status) {
             this.tabManager.setTabLoaded(

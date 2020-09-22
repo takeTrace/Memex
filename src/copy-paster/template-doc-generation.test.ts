@@ -24,6 +24,12 @@ async function insertTestData(storageManager: Storex) {
         pageUrl: DATA.testPageA.url,
     })
 
+    await storageManager.collection('annotations').createObject({
+        url: DATA.testAnnotationCUrl,
+        body: DATA.testAnnotationCHighlight,
+        pageUrl: DATA.testPageB.url,
+    })
+
     const insertTags = (url: string, tags: string[]) =>
         Promise.all(
             tags.map((name) =>
@@ -35,6 +41,7 @@ async function insertTestData(storageManager: Storex) {
     await insertTags(normalizeUrl(DATA.testPageBUrl), DATA.testPageBTags)
     await insertTags(DATA.testAnnotationAUrl, DATA.testAnnotationATags)
     await insertTags(DATA.testAnnotationBUrl, DATA.testAnnotationBTags)
+    await insertTags(DATA.testAnnotationCUrl, DATA.testAnnotationCTags)
 }
 
 async function setupTest() {
@@ -281,50 +288,131 @@ describe('Content template doc generation', () => {
     it('should correctly generate template docs for multiple pages', async () => {
         const { dataFetchers } = await setupTest()
 
-        // TODO: this case is not yet supported, but likely to be in the future
-        // expect(
-        //     await generateTemplateDocs({
-        //         template: {
-        //             ...testTemplate,
-        //             code: '{{#Pages}}{{{PageTitle}}}{{/Pages}}',
-        //         },
-        //         normalizedPageUrls: [DATA.testPageA.url, DATA.testPageB.url],
-        //         annotationUrls: [],
-        //         dataFetchers,
-        //     }),
-        // ).toEqual([
-        //     {
-        //         Pages: [
-        //             {
-        //                 PageTitle: DATA.testPageA.fullTitle,
-        //                 PageTags: joinTags(DATA.testPageATags),
-        //                 PageTagList: DATA.testPageATags,
-        //                 PageUrl: DATA.testPageAUrl,
-        //                 title: DATA.testPageA.fullTitle,
-        //                 tags: DATA.testPageATags,
-        //                 url: DATA.testPageAUrl,
-        //             },
-        //             {
-        //                 PageTitle: DATA.testPageB.fullTitle,
-        //                 PageTags: joinTags(DATA.testPageBTags),
-        //                 PageTagList: DATA.testPageBTags,
-        //                 PageUrl: DATA.testPageBUrl,
-        //                 title: DATA.testPageB.fullTitle,
-        //                 tags: DATA.testPageBTags,
-        //                 url: DATA.testPageBUrl,
-        //             },
-        //         ],
-        //     },
-        // ])
-
-        expect(
-            await generateTemplateDocs({
-                templateAnalysis: analyzeTemplate({ code: '{{{PageTitle}}}' }),
+        const generate = (template: string) =>
+            generateTemplateDocs({
+                templateAnalysis: analyzeTemplate({ code: template }),
                 normalizedPageUrls: [DATA.testPageA.url, DATA.testPageB.url],
                 annotationUrls: [],
                 dataFetchers,
-            }),
+            })
+
+        expect(await generate('{{#Pages}}{{{PageTitle}}}{{/Pages}}')).toEqual([
+            {
+                Pages: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageUrl: DATA.testPageAUrl,
+                        title: DATA.testPageA.fullTitle,
+                        url: DATA.testPageAUrl,
+                    },
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageUrl: DATA.testPageBUrl,
+                        title: DATA.testPageB.fullTitle,
+                        url: DATA.testPageBUrl,
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{#Pages}} {{{PageTitle}}} {{{PageLink}}} {{/Pages}}',
+            ),
         ).toEqual([
+            {
+                Pages: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        url: DATA.testPageAUrl,
+                    },
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageUrl: DATA.testPageBUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageB.fullTitle,
+                        url: DATA.testPageBUrl,
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{#Pages}} {{{PageTitle}}} {{{PageTags}}} {{/Pages}}',
+            ),
+        ).toEqual([
+            {
+                Pages: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageTags: joinTags(DATA.testPageATags),
+                        PageTagList: DATA.testPageATags,
+                        PageUrl: DATA.testPageAUrl,
+                        title: DATA.testPageA.fullTitle,
+                        tags: DATA.testPageATags,
+                        url: DATA.testPageAUrl,
+                    },
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageTags: joinTags(DATA.testPageBTags),
+                        PageTagList: DATA.testPageBTags,
+                        PageUrl: DATA.testPageBUrl,
+                        title: DATA.testPageB.fullTitle,
+                        tags: DATA.testPageBTags,
+                        url: DATA.testPageBUrl,
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{#Pages}} {{{PageTitle}}} {{{PageTags}}} {{{PageLink}}} {{/Pages}}',
+            ),
+        ).toEqual([
+            {
+                Pages: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageTags: joinTags(DATA.testPageATags),
+                        PageTagList: DATA.testPageATags,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        tags: DATA.testPageATags,
+                        url: DATA.testPageAUrl,
+                    },
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageTags: joinTags(DATA.testPageBTags),
+                        PageTagList: DATA.testPageBTags,
+                        PageUrl: DATA.testPageBUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageB.fullTitle,
+                        tags: DATA.testPageBTags,
+                        url: DATA.testPageBUrl,
+                    },
+                ],
+            },
+        ])
+    })
+
+    it('should correctly generate template docs for multiple pages, but only referencing top-level page vars', async () => {
+        const { dataFetchers } = await setupTest()
+
+        const generate = (template: string) =>
+            generateTemplateDocs({
+                templateAnalysis: analyzeTemplate({ code: template }),
+                normalizedPageUrls: [DATA.testPageA.url, DATA.testPageB.url],
+                annotationUrls: [],
+                dataFetchers,
+            })
+
+        expect(await generate('{{{PageTitle}}}')).toEqual([
             {
                 PageTitle: DATA.testPageA.fullTitle,
                 PageUrl: DATA.testPageAUrl,
@@ -336,6 +424,755 @@ describe('Content template doc generation', () => {
                 PageUrl: DATA.testPageBUrl,
                 title: DATA.testPageB.fullTitle,
                 url: DATA.testPageBUrl,
+            },
+        ])
+
+        expect(await generate('{{{PageTitle}}} {{{PageTags}}}')).toEqual([
+            {
+                PageTitle: DATA.testPageA.fullTitle,
+                PageTags: joinTags(DATA.testPageATags),
+                PageTagList: DATA.testPageATags,
+                PageUrl: DATA.testPageAUrl,
+                title: DATA.testPageA.fullTitle,
+                tags: DATA.testPageATags,
+                url: DATA.testPageAUrl,
+            },
+            {
+                PageTitle: DATA.testPageB.fullTitle,
+                PageTags: joinTags(DATA.testPageBTags),
+                PageTagList: DATA.testPageBTags,
+                PageUrl: DATA.testPageBUrl,
+                title: DATA.testPageB.fullTitle,
+                tags: DATA.testPageBTags,
+                url: DATA.testPageBUrl,
+            },
+        ])
+
+        expect(await generate('{{{PageTitle}}} {{{PageLink}}}')).toEqual([
+            {
+                PageTitle: DATA.testPageA.fullTitle,
+                PageUrl: DATA.testPageAUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageA.fullTitle,
+                url: DATA.testPageAUrl,
+            },
+            {
+                PageTitle: DATA.testPageB.fullTitle,
+                PageUrl: DATA.testPageBUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageB.fullTitle,
+                url: DATA.testPageBUrl,
+            },
+        ])
+
+        expect(
+            await generate('{{{PageTitle}}} {{{PageTags}}} {{{PageLink}}}'),
+        ).toEqual([
+            {
+                PageTitle: DATA.testPageA.fullTitle,
+                PageTags: joinTags(DATA.testPageATags),
+                PageTagList: DATA.testPageATags,
+                PageUrl: DATA.testPageAUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageA.fullTitle,
+                tags: DATA.testPageATags,
+                url: DATA.testPageAUrl,
+            },
+            {
+                PageTitle: DATA.testPageB.fullTitle,
+                PageTags: joinTags(DATA.testPageBTags),
+                PageTagList: DATA.testPageBTags,
+                PageUrl: DATA.testPageBUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageB.fullTitle,
+                tags: DATA.testPageBTags,
+                url: DATA.testPageBUrl,
+            },
+        ])
+    })
+
+    it('should correctly generate template docs for multiple pages, with note references', async () => {
+        const { dataFetchers } = await setupTest()
+
+        const generate = (template: string) =>
+            generateTemplateDocs({
+                templateAnalysis: analyzeTemplate({ code: template }),
+                normalizedPageUrls: [DATA.testPageA.url, DATA.testPageB.url],
+                annotationUrls: [
+                    DATA.testAnnotationAUrl,
+                    DATA.testAnnotationBUrl,
+                    DATA.testAnnotationCUrl,
+                ],
+                dataFetchers,
+            })
+
+        expect(
+            await generate(
+                '{{#Pages}} {{{PageTitle}}} {{{PageTags}}} {{{PageLink}}} {{#Notes}} {{{NoteHighlight}}} {{{NoteTags}}} {{{NoteLink}}} {{/Notes}} {{/Pages}}',
+            ),
+        ).toEqual([
+            {
+                Pages: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageTags: joinTags(DATA.testPageATags),
+                        PageTagList: DATA.testPageATags,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        tags: DATA.testPageATags,
+                        url: DATA.testPageAUrl,
+                        Notes: [
+                            {
+                                NoteText: DATA.testAnnotationAText,
+                                NoteTags: joinTags(DATA.testAnnotationATags),
+                                NoteTagList: DATA.testAnnotationATags,
+                                NoteLink: expect.any(String),
+                                PageTitle: DATA.testPageA.fullTitle,
+                                PageTags: joinTags(DATA.testPageATags),
+                                PageTagList: DATA.testPageATags,
+                                PageUrl: DATA.testPageAUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageA.fullTitle,
+                                tags: DATA.testPageATags,
+                                url: DATA.testPageAUrl,
+                            },
+                            {
+                                NoteHighlight: DATA.testAnnotationBHighlight,
+                                NoteTags: joinTags(DATA.testAnnotationBTags),
+                                NoteTagList: DATA.testAnnotationBTags,
+                                NoteLink: expect.any(String),
+                                PageTitle: DATA.testPageA.fullTitle,
+                                PageTags: joinTags(DATA.testPageATags),
+                                PageTagList: DATA.testPageATags,
+                                PageUrl: DATA.testPageAUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageA.fullTitle,
+                                tags: DATA.testPageATags,
+                                url: DATA.testPageAUrl,
+                            },
+                        ],
+                    },
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageTags: joinTags(DATA.testPageBTags),
+                        PageTagList: DATA.testPageBTags,
+                        PageUrl: DATA.testPageBUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageB.fullTitle,
+                        tags: DATA.testPageBTags,
+                        url: DATA.testPageBUrl,
+                        Notes: [
+                            {
+                                NoteHighlight: DATA.testAnnotationCHighlight,
+                                NoteTags: joinTags(DATA.testAnnotationCTags),
+                                NoteTagList: DATA.testAnnotationCTags,
+                                NoteLink: expect.any(String),
+                                PageTitle: DATA.testPageB.fullTitle,
+                                PageTags: joinTags(DATA.testPageBTags),
+                                PageTagList: DATA.testPageBTags,
+                                PageUrl: DATA.testPageBUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageB.fullTitle,
+                                tags: DATA.testPageBTags,
+                                url: DATA.testPageBUrl,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{#Pages}} {{{PageTitle}}} {{{PageTags}}} {{{PageLink}}} {{#Notes}} {{{NoteHighlight}}} {{{NoteLink}}} {{/Notes}} {{/Pages}}',
+            ),
+        ).toEqual([
+            {
+                Pages: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageTags: joinTags(DATA.testPageATags),
+                        PageTagList: DATA.testPageATags,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        tags: DATA.testPageATags,
+                        url: DATA.testPageAUrl,
+                        Notes: [
+                            {
+                                NoteText: DATA.testAnnotationAText,
+                                NoteLink: expect.any(String),
+                                PageTitle: DATA.testPageA.fullTitle,
+                                PageTags: joinTags(DATA.testPageATags),
+                                PageTagList: DATA.testPageATags,
+                                PageUrl: DATA.testPageAUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageA.fullTitle,
+                                tags: DATA.testPageATags,
+                                url: DATA.testPageAUrl,
+                            },
+                            {
+                                NoteHighlight: DATA.testAnnotationBHighlight,
+                                NoteLink: expect.any(String),
+                                PageTitle: DATA.testPageA.fullTitle,
+                                PageTags: joinTags(DATA.testPageATags),
+                                PageTagList: DATA.testPageATags,
+                                PageUrl: DATA.testPageAUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageA.fullTitle,
+                                tags: DATA.testPageATags,
+                                url: DATA.testPageAUrl,
+                            },
+                        ],
+                    },
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageTags: joinTags(DATA.testPageBTags),
+                        PageTagList: DATA.testPageBTags,
+                        PageUrl: DATA.testPageBUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageB.fullTitle,
+                        tags: DATA.testPageBTags,
+                        url: DATA.testPageBUrl,
+                        Notes: [
+                            {
+                                NoteHighlight: DATA.testAnnotationCHighlight,
+                                NoteLink: expect.any(String),
+                                PageTitle: DATA.testPageB.fullTitle,
+                                PageTags: joinTags(DATA.testPageBTags),
+                                PageTagList: DATA.testPageBTags,
+                                PageUrl: DATA.testPageBUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageB.fullTitle,
+                                tags: DATA.testPageBTags,
+                                url: DATA.testPageBUrl,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{#Pages}} {{{PageTitle}}} {{{PageTags}}} {{{PageLink}}} {{#Notes}} {{{NoteHighlight}}} {{/Notes}} {{/Pages}}',
+            ),
+        ).toEqual([
+            {
+                Pages: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageTags: joinTags(DATA.testPageATags),
+                        PageTagList: DATA.testPageATags,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        tags: DATA.testPageATags,
+                        url: DATA.testPageAUrl,
+                        Notes: [
+                            {
+                                NoteText: DATA.testAnnotationAText,
+                                PageTitle: DATA.testPageA.fullTitle,
+                                PageTags: joinTags(DATA.testPageATags),
+                                PageTagList: DATA.testPageATags,
+                                PageUrl: DATA.testPageAUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageA.fullTitle,
+                                tags: DATA.testPageATags,
+                                url: DATA.testPageAUrl,
+                            },
+                            {
+                                NoteHighlight: DATA.testAnnotationBHighlight,
+                                PageTitle: DATA.testPageA.fullTitle,
+                                PageTags: joinTags(DATA.testPageATags),
+                                PageTagList: DATA.testPageATags,
+                                PageUrl: DATA.testPageAUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageA.fullTitle,
+                                tags: DATA.testPageATags,
+                                url: DATA.testPageAUrl,
+                            },
+                        ],
+                    },
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageTags: joinTags(DATA.testPageBTags),
+                        PageTagList: DATA.testPageBTags,
+                        PageUrl: DATA.testPageBUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageB.fullTitle,
+                        tags: DATA.testPageBTags,
+                        url: DATA.testPageBUrl,
+                        Notes: [
+                            {
+                                NoteHighlight: DATA.testAnnotationCHighlight,
+                                PageTitle: DATA.testPageB.fullTitle,
+                                PageTags: joinTags(DATA.testPageBTags),
+                                PageTagList: DATA.testPageBTags,
+                                PageUrl: DATA.testPageBUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageB.fullTitle,
+                                tags: DATA.testPageBTags,
+                                url: DATA.testPageBUrl,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{#Pages}} {{{PageTitle}}} {{{PageLink}}} {{#Notes}} {{{NoteHighlight}}} {{/Notes}} {{/Pages}}',
+            ),
+        ).toEqual([
+            {
+                Pages: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        url: DATA.testPageAUrl,
+                        Notes: [
+                            {
+                                NoteText: DATA.testAnnotationAText,
+                                PageTitle: DATA.testPageA.fullTitle,
+                                PageUrl: DATA.testPageAUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageA.fullTitle,
+                                url: DATA.testPageAUrl,
+                            },
+                            {
+                                NoteHighlight: DATA.testAnnotationBHighlight,
+                                PageTitle: DATA.testPageA.fullTitle,
+                                PageUrl: DATA.testPageAUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageA.fullTitle,
+                                url: DATA.testPageAUrl,
+                            },
+                        ],
+                    },
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageUrl: DATA.testPageBUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageB.fullTitle,
+                        url: DATA.testPageBUrl,
+                        Notes: [
+                            {
+                                NoteHighlight: DATA.testAnnotationCHighlight,
+                                PageTitle: DATA.testPageB.fullTitle,
+                                PageUrl: DATA.testPageBUrl,
+                                PageLink: expect.any(String),
+                                title: DATA.testPageB.fullTitle,
+                                url: DATA.testPageBUrl,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{#Pages}} {{{PageTitle}}} {{#Notes}} {{{NoteHighlight}}} {{/Notes}} {{/Pages}}',
+            ),
+        ).toEqual([
+            {
+                Pages: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageUrl: DATA.testPageAUrl,
+                        title: DATA.testPageA.fullTitle,
+                        url: DATA.testPageAUrl,
+                        Notes: [
+                            {
+                                NoteText: DATA.testAnnotationAText,
+                                PageTitle: DATA.testPageA.fullTitle,
+                                PageUrl: DATA.testPageAUrl,
+                                title: DATA.testPageA.fullTitle,
+                                url: DATA.testPageAUrl,
+                            },
+                            {
+                                NoteHighlight: DATA.testAnnotationBHighlight,
+                                PageTitle: DATA.testPageA.fullTitle,
+                                PageUrl: DATA.testPageAUrl,
+                                title: DATA.testPageA.fullTitle,
+                                url: DATA.testPageAUrl,
+                            },
+                        ],
+                    },
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageUrl: DATA.testPageBUrl,
+                        title: DATA.testPageB.fullTitle,
+                        url: DATA.testPageBUrl,
+                        Notes: [
+                            {
+                                NoteHighlight: DATA.testAnnotationCHighlight,
+                                PageTitle: DATA.testPageB.fullTitle,
+                                PageUrl: DATA.testPageBUrl,
+                                title: DATA.testPageB.fullTitle,
+                                url: DATA.testPageBUrl,
+                            },
+                        ],
+                    },
+                ],
+            },
+        ])
+    })
+
+    it('should correctly generate template docs for multiple pages, with note references but only referencing top-level page vars', async () => {
+        const { dataFetchers } = await setupTest()
+
+        const generate = (template: string) =>
+            generateTemplateDocs({
+                templateAnalysis: analyzeTemplate({ code: template }),
+                normalizedPageUrls: [DATA.testPageA.url, DATA.testPageB.url],
+                annotationUrls: [
+                    DATA.testAnnotationAUrl,
+                    DATA.testAnnotationBUrl,
+                    DATA.testAnnotationCUrl,
+                ],
+                dataFetchers,
+            })
+
+        expect(
+            await generate(
+                '{{{PageTitle}}} {{#Notes}} {{{NoteHighlight}}} {{/Notes}}',
+            ),
+        ).toEqual([
+            {
+                PageTitle: DATA.testPageA.fullTitle,
+                PageUrl: DATA.testPageAUrl,
+                title: DATA.testPageA.fullTitle,
+                url: DATA.testPageAUrl,
+                Notes: [
+                    {
+                        NoteText: DATA.testAnnotationAText,
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageUrl: DATA.testPageAUrl,
+                        title: DATA.testPageA.fullTitle,
+                        url: DATA.testPageAUrl,
+                    },
+                    {
+                        NoteHighlight: DATA.testAnnotationBHighlight,
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageUrl: DATA.testPageAUrl,
+                        title: DATA.testPageA.fullTitle,
+                        url: DATA.testPageAUrl,
+                    },
+                ],
+            },
+            {
+                PageTitle: DATA.testPageB.fullTitle,
+                PageUrl: DATA.testPageBUrl,
+                title: DATA.testPageB.fullTitle,
+                url: DATA.testPageBUrl,
+                Notes: [
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageUrl: DATA.testPageBUrl,
+                        title: DATA.testPageB.fullTitle,
+                        url: DATA.testPageBUrl,
+                        NoteHighlight: DATA.testAnnotationCHighlight,
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{{PageTitle}}} {{{PageLink}}} {{#Notes}} {{{NoteHighlight}}} {{/Notes}}',
+            ),
+        ).toEqual([
+            {
+                PageTitle: DATA.testPageA.fullTitle,
+                PageUrl: DATA.testPageAUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageA.fullTitle,
+                url: DATA.testPageAUrl,
+                Notes: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        url: DATA.testPageAUrl,
+                        NoteText: DATA.testAnnotationAText,
+                    },
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        url: DATA.testPageAUrl,
+                        NoteHighlight: DATA.testAnnotationBHighlight,
+                    },
+                ],
+            },
+            {
+                PageTitle: DATA.testPageB.fullTitle,
+                PageUrl: DATA.testPageBUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageB.fullTitle,
+                url: DATA.testPageBUrl,
+                Notes: [
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageUrl: DATA.testPageBUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageB.fullTitle,
+                        url: DATA.testPageBUrl,
+                        NoteHighlight: DATA.testAnnotationCHighlight,
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{{PageTitle}}} {{{PageTags}}} {{{PageLink}}} {{#Notes}} {{{NoteHighlight}}} {{/Notes}}',
+            ),
+        ).toEqual([
+            {
+                PageTitle: DATA.testPageA.fullTitle,
+                PageTags: joinTags(DATA.testPageATags),
+                PageTagList: DATA.testPageATags,
+                PageUrl: DATA.testPageAUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageA.fullTitle,
+                tags: DATA.testPageATags,
+                url: DATA.testPageAUrl,
+                Notes: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageTags: joinTags(DATA.testPageATags),
+                        PageTagList: DATA.testPageATags,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        tags: DATA.testPageATags,
+                        url: DATA.testPageAUrl,
+                        NoteText: DATA.testAnnotationAText,
+                    },
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageTags: joinTags(DATA.testPageATags),
+                        PageTagList: DATA.testPageATags,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        tags: DATA.testPageATags,
+                        url: DATA.testPageAUrl,
+                        NoteHighlight: DATA.testAnnotationBHighlight,
+                    },
+                ],
+            },
+            {
+                PageTitle: DATA.testPageB.fullTitle,
+                PageTags: joinTags(DATA.testPageBTags),
+                PageTagList: DATA.testPageBTags,
+                PageUrl: DATA.testPageBUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageB.fullTitle,
+                tags: DATA.testPageBTags,
+                url: DATA.testPageBUrl,
+                Notes: [
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageTags: joinTags(DATA.testPageBTags),
+                        PageTagList: DATA.testPageBTags,
+                        PageUrl: DATA.testPageBUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageB.fullTitle,
+                        tags: DATA.testPageBTags,
+                        url: DATA.testPageBUrl,
+                        NoteHighlight: DATA.testAnnotationCHighlight,
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{{PageTitle}}} {{{PageTags}}} {{{PageLink}}} {{#Notes}} {{{NoteHighlight}}} {{{NoteLink}}} {{/Notes}}',
+            ),
+        ).toEqual([
+            {
+                PageTitle: DATA.testPageA.fullTitle,
+                PageTags: joinTags(DATA.testPageATags),
+                PageTagList: DATA.testPageATags,
+                PageUrl: DATA.testPageAUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageA.fullTitle,
+                tags: DATA.testPageATags,
+                url: DATA.testPageAUrl,
+                Notes: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageTags: joinTags(DATA.testPageATags),
+                        PageTagList: DATA.testPageATags,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        tags: DATA.testPageATags,
+                        url: DATA.testPageAUrl,
+                        NoteText: DATA.testAnnotationAText,
+                        NoteLink: expect.any(String),
+                    },
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageTags: joinTags(DATA.testPageATags),
+                        PageTagList: DATA.testPageATags,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        tags: DATA.testPageATags,
+                        url: DATA.testPageAUrl,
+                        NoteHighlight: DATA.testAnnotationBHighlight,
+                        NoteLink: expect.any(String),
+                    },
+                ],
+            },
+            {
+                PageTitle: DATA.testPageB.fullTitle,
+                PageTags: joinTags(DATA.testPageBTags),
+                PageTagList: DATA.testPageBTags,
+                PageUrl: DATA.testPageBUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageB.fullTitle,
+                tags: DATA.testPageBTags,
+                url: DATA.testPageBUrl,
+                Notes: [
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageTags: joinTags(DATA.testPageBTags),
+                        PageTagList: DATA.testPageBTags,
+                        PageUrl: DATA.testPageBUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageB.fullTitle,
+                        tags: DATA.testPageBTags,
+                        url: DATA.testPageBUrl,
+                        NoteHighlight: DATA.testAnnotationCHighlight,
+                        NoteLink: expect.any(String),
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{{PageTitle}}} {{{PageTags}}} {{{PageLink}}} {{#Notes}} {{{NoteHighlight}}} {{{NoteTags}}} {{{NoteLink}}} {{/Notes}}',
+            ),
+        ).toEqual([
+            {
+                PageTitle: DATA.testPageA.fullTitle,
+                PageTags: joinTags(DATA.testPageATags),
+                PageTagList: DATA.testPageATags,
+                PageUrl: DATA.testPageAUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageA.fullTitle,
+                tags: DATA.testPageATags,
+                url: DATA.testPageAUrl,
+                Notes: [
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageTags: joinTags(DATA.testPageATags),
+                        PageTagList: DATA.testPageATags,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        tags: DATA.testPageATags,
+                        url: DATA.testPageAUrl,
+                        NoteText: DATA.testAnnotationAText,
+                        NoteTags: joinTags(DATA.testAnnotationATags),
+                        NoteTagList: DATA.testAnnotationATags,
+                        NoteLink: expect.any(String),
+                    },
+                    {
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageTags: joinTags(DATA.testPageATags),
+                        PageTagList: DATA.testPageATags,
+                        PageUrl: DATA.testPageAUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageA.fullTitle,
+                        tags: DATA.testPageATags,
+                        url: DATA.testPageAUrl,
+                        NoteHighlight: DATA.testAnnotationBHighlight,
+                        NoteTags: joinTags(DATA.testAnnotationBTags),
+                        NoteTagList: DATA.testAnnotationBTags,
+                        NoteLink: expect.any(String),
+                    },
+                ],
+            },
+            {
+                PageTitle: DATA.testPageB.fullTitle,
+                PageTags: joinTags(DATA.testPageBTags),
+                PageTagList: DATA.testPageBTags,
+                PageUrl: DATA.testPageBUrl,
+                PageLink: expect.any(String),
+                title: DATA.testPageB.fullTitle,
+                tags: DATA.testPageBTags,
+                url: DATA.testPageBUrl,
+                Notes: [
+                    {
+                        PageTitle: DATA.testPageB.fullTitle,
+                        PageTags: joinTags(DATA.testPageBTags),
+                        PageTagList: DATA.testPageBTags,
+                        PageUrl: DATA.testPageBUrl,
+                        PageLink: expect.any(String),
+                        title: DATA.testPageB.fullTitle,
+                        tags: DATA.testPageBTags,
+                        url: DATA.testPageBUrl,
+                        NoteHighlight: DATA.testAnnotationCHighlight,
+                        NoteTags: joinTags(DATA.testAnnotationCTags),
+                        NoteTagList: DATA.testAnnotationCTags,
+                        NoteLink: expect.any(String),
+                    },
+                ],
+            },
+        ])
+    })
+
+    it('should correctly generate template docs for multiple pages, with note references but referencing top-level page AND note vars', async () => {
+        const { dataFetchers } = await setupTest()
+
+        const generate = (template: string) =>
+            generateTemplateDocs({
+                templateAnalysis: analyzeTemplate({ code: template }),
+                normalizedPageUrls: [DATA.testPageA.url, DATA.testPageB.url],
+                annotationUrls: [
+                    DATA.testAnnotationAUrl,
+                    DATA.testAnnotationBUrl,
+                    DATA.testAnnotationCUrl,
+                ],
+                dataFetchers,
+            })
+
+        expect(await generate('{{{NoteText}}} {{{PageTitle}}}')).toEqual([
+            {
+                PageTitle: DATA.testPageA.fullTitle,
+                PageUrl: DATA.testPageAUrl,
+                title: DATA.testPageA.fullTitle,
+                url: DATA.testPageAUrl,
+                NoteText: DATA.testAnnotationAText,
+            },
+            {
+                PageTitle: DATA.testPageA.fullTitle,
+                PageUrl: DATA.testPageAUrl,
+                title: DATA.testPageA.fullTitle,
+                url: DATA.testPageAUrl,
+                NoteHighlight: DATA.testAnnotationBHighlight,
+            },
+            {
+                PageTitle: DATA.testPageB.fullTitle,
+                PageUrl: DATA.testPageBUrl,
+                title: DATA.testPageB.fullTitle,
+                url: DATA.testPageBUrl,
+                NoteHighlight: DATA.testAnnotationCHighlight,
             },
         ])
     })
@@ -638,7 +1475,7 @@ describe('Content template doc generation', () => {
         ])
     })
 
-    it('should correctly generate template docs for multiple annotations, but only referencing top-level annotation', async () => {
+    it('should correctly generate template docs for multiple annotations, but only referencing top-level annotation vars', async () => {
         const { dataFetchers } = await setupTest()
 
         const generate = (template: string) =>
@@ -908,6 +1745,44 @@ describe('Content template doc generation', () => {
                     {
                         NoteHighlight: DATA.testAnnotationBHighlight,
                         NoteLink: expect.any(String), // TODO: properly set once implemented
+                        PageUrl: DATA.testPageAUrl,
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageLink: expect.any(String), // TODO: properly set once implemented
+                        url: DATA.testPageAUrl,
+                        title: DATA.testPageA.fullTitle,
+                    },
+                ],
+            },
+        ])
+
+        expect(
+            await generate(
+                '{{#Notes}}{{{NoteText}}} {{{NoteLink}}} {{{NoteTags}}}{{/Notes}} {{{PageLink}}} {{{PageTitle}}}',
+            ),
+        ).toEqual([
+            {
+                PageUrl: DATA.testPageAUrl,
+                PageTitle: DATA.testPageA.fullTitle,
+                PageLink: expect.any(String), // TODO: properly set once implemented
+                url: DATA.testPageAUrl,
+                title: DATA.testPageA.fullTitle,
+                Notes: [
+                    {
+                        NoteText: DATA.testAnnotationAText,
+                        NoteLink: expect.any(String), // TODO: properly set once implemented
+                        NoteTags: joinTags(DATA.testAnnotationATags),
+                        NoteTagList: DATA.testAnnotationATags,
+                        PageUrl: DATA.testPageAUrl,
+                        PageTitle: DATA.testPageA.fullTitle,
+                        PageLink: expect.any(String), // TODO: properly set once implemented
+                        url: DATA.testPageAUrl,
+                        title: DATA.testPageA.fullTitle,
+                    },
+                    {
+                        NoteHighlight: DATA.testAnnotationBHighlight,
+                        NoteLink: expect.any(String), // TODO: properly set once implemented
+                        NoteTags: joinTags(DATA.testAnnotationBTags),
+                        NoteTagList: DATA.testAnnotationBTags,
                         PageUrl: DATA.testPageAUrl,
                         PageTitle: DATA.testPageA.fullTitle,
                         PageLink: expect.any(String), // TODO: properly set once implemented

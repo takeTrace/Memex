@@ -11,7 +11,8 @@ export type TemplateDoc = {
 } & TemplateDocPage &
     TemplateDocNote
 
-export type TemplateDocKey = keyof (TemplateDocPage & TemplateDocNote)
+export type TemplateDocKey = keyof (Omit<TemplateDocPage, 'Notes'> &
+    TemplateDocNote)
 
 export interface TemplateDocPage {
     PageUrl?: string
@@ -19,6 +20,7 @@ export interface TemplateDocPage {
     PageTags?: string
     PageTagList?: string[]
     PageLink?: string
+    Notes?: TemplateDocNote[]
 
     // For backward compatibility
     url?: string
@@ -36,7 +38,7 @@ export interface TemplateDocNote {
 
 export interface TemplateAnalysis {
     usesLegacyTags: boolean
-    noteUsage?: 'single' | 'multiple'
+    expectedContext: 'note' | 'page' | 'page-list'
     requirements: TemplateRequirements
 }
 

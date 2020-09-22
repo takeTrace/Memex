@@ -13,7 +13,7 @@ import DeprecatedSearchWarning, {
     shouldShowDeprecatedSearchWarning,
 } from './DeprecatedSearchWarning'
 import OnboardingMessage from './onboarding-message'
-import SearchTypeSwitch from './search-type-switch-container'
+import SearchTypeSwitch from './search-type-switch'
 import * as actions from '../actions'
 import * as selectors from '../selectors'
 import { RootState } from 'src/options/types'
@@ -139,7 +139,7 @@ class ResultsContainer extends React.Component<Props, State> {
             return (
                 <ResultsMessage>
                     <NoResultBadTerm>
-                        found for this query. ¯\_(ツ)_/¯
+                        ¯\_(ツ)_/¯
                     </NoResultBadTerm>
                 </ResultsMessage>
             )

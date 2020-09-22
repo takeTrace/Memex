@@ -128,6 +128,7 @@ export function createBackgroundModules(options: {
         browserAPIs: options.browserAPIs,
         tabManager,
         pageStorage: pages.storage,
+        bookmarksBG: bookmarks,
     })
 
     const search = new SearchBackground({
@@ -208,6 +209,7 @@ export function createBackgroundModules(options: {
     const copyPaster = new CopyPasterBackground({
         storageManager,
         contentSharing,
+        search,
     })
 
     const bgScript = new BackgroundScript({
