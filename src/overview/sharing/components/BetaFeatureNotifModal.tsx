@@ -1,22 +1,22 @@
 import React, { Component } from 'react'
 
 import Modal, { Props as ModalProps } from 'src/common-ui/components/Modal'
-import BetaFeatureNotif from './BetaFeatureNotif'
+import BetaFeatureNotif, {
+    Props as BetaFeatureNotifProps,
+} from './BetaFeatureNotif'
 
 export interface Props
-    extends Pick<ModalProps, 'onClose' | 'requiresExplicitStyles'> {
-    showSubscriptionModal: () => void
-}
+    extends BetaFeatureNotifProps,
+        Pick<
+            ModalProps,
+            'onClose' | 'requiresExplicitStyles' | 'ignoreReactPortal'
+        > {}
 
 export default class BetaFeatureNotifModal extends Component<Props> {
     render() {
-        const { showSubscriptionModal, ...props } = this.props
-
         return (
-            <Modal large {...props}>
-                <BetaFeatureNotif
-                    showSubscriptionModal={showSubscriptionModal}
-                />
+            <Modal large {...this.props}>
+                <BetaFeatureNotif {...this.props} />
             </Modal>
         )
     }

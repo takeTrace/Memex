@@ -136,7 +136,14 @@ export class AnnotationsSidebarInPage extends AnnotationsSidebarContainer<
                 })
             }
         } else if (event.action === 'show_annotation') {
+            console.log('show annot!')
             this.activateAnnotation(event.annotationUrl)
+        } else if (event.action === 'edit_annotation') {
+            console.log('edit annot!')
+            this.processEvent('editAnnotation', {
+                annotationUrl: event.annotationUrl,
+                context: 'pageAnnotations',
+            })
         } else if (event.action === 'set_sharing_access') {
             this.processEvent('receiveSharingAccessChange', {
                 sharingAccess: event.annotationSharingAccess,
@@ -195,7 +202,7 @@ export class AnnotationsSidebarInPage extends AnnotationsSidebarContainer<
             <>
                 {this.state.showAnnotationsShareModal && (
                     <ShareAnnotationOnboardingModal
-                        requiresExplicitStyles
+                        ignoreReactPortal
                         onClose={() =>
                             this.processEvent('setAnnotationShareModalShown', {
                                 shown: false,
@@ -218,7 +225,8 @@ export class AnnotationsSidebarInPage extends AnnotationsSidebarContainer<
                 )}
                 {this.state.showBetaFeatureNotifModal && (
                     <BetaFeatureNotifModal
-                        requiresExplicitStyles
+                        ignoreReactPortal
+                        betaRequestStrategy="go-to-options-page"
                         onClose={() =>
                             this.processEvent('setBetaFeatureNotifModalShown', {
                                 shown: false,

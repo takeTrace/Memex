@@ -388,18 +388,10 @@ export class AnnotationsSidebarContainer<
                         </ButtonTooltip>
                         <ButtonTooltip
                             tooltipText="Share All Notes"
-                            position="bottom"
+                            position="bottomRightEdge"
                         >
                             <ActionBtn onClick={this.handleShareAllNotesClick}>
                                 <ActionIcon src={icons.shareEmpty} />
-                            </ActionBtn>
-                        </ButtonTooltip>
-                        <ButtonTooltip
-                            tooltipText="Add notes to page"
-                            position="bottomRightEdge"
-                        >
-                            <ActionBtn onClick={this.handleAddCommentBtnClick}>
-                                <ActionIcon src={icons.commentAdd} />
                             </ActionBtn>
                         </ButtonTooltip>
                     </TopBarActionBtns>

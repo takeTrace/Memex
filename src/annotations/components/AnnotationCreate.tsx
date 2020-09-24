@@ -53,13 +53,29 @@ class AnnotationCreate extends React.Component<
         }
     }
 
-    private handleSave = () =>
+    private handleCancel = () => {
+        this.setState({
+            text: '',
+            isBookmarked: false,
+            tags: [],
+            isTagPickerShown: false,
+        })
+    }
+
+    private handleSave = () => {
         this.props.onSave({
             anchor: this.props.anchor,
             isBookmarked: this.state.isBookmarked,
             tags: this.state.tags,
             text: this.state.text,
         })
+        this.setState({
+            text: '',
+            isBookmarked: false,
+            tags: [],
+            isTagPickerShown: false,
+        })
+    }
 
     private hideTagPicker = () => this.setState({ isTagPickerShown: false })
 
@@ -88,11 +104,14 @@ class AnnotationCreate extends React.Component<
                 autoFocus
                 value={this.state.text}
                 onClick={this.hideTagPicker}
-                placeholder="Add a private note... (save with cmd/ctrl+enter)"
+                placeholder="Add private note (save with cmd/ctrl+enter)"
                 onChange={(e) => this.setState({ text: e.target.value })}
-                onKeyDown={(e) =>
-                    onEnterSaveHandler.test(e) && onEnterSaveHandler.handle(e)
-                }
+                onKeyDown={(e) => {
+                    e.stopPropagation()
+                    if (onEnterSaveHandler.test(e)) {
+                        onEnterSaveHandler.handle(e)
+                    }
+                }}
             />
         )
     }
@@ -129,7 +148,7 @@ class AnnotationCreate extends React.Component<
 
         return (
             <FooterStyled>
-                <InteractionItemsBox>
+                {/*<InteractionItemsBox>
                     <ButtonTooltip tooltipText="Favorite" position="bottom">
                         <InteractionsImgContainerStyled
                             onClick={() =>
@@ -148,16 +167,20 @@ class AnnotationCreate extends React.Component<
                         </InteractionsImgContainerStyled>
                     </ButtonTooltip>
                 </InteractionItemsBox>
+                */}
+
                 <Flex>
                     <ButtonTooltip
                         tooltipText="ctrl/cmd + Enter"
                         position="bottom"
                     >
                         <SaveBtnStyled onClick={this.handleSave}>
-                            Save
+                            Add
                         </SaveBtnStyled>
                     </ButtonTooltip>
-                    <CancelBtnStyled onClick={onCancel}>Cancel</CancelBtnStyled>
+                    <CancelBtnStyled onClick={this.handleCancel}>
+                        Cancel
+                    </CancelBtnStyled>
                 </Flex>
             </FooterStyled>
         )
@@ -168,8 +191,12 @@ class AnnotationCreate extends React.Component<
             <TextBoxContainerStyled>
                 {this.renderHighlight()}
                 {this.renderInput()}
-                {this.renderTagPicker()}
-                {this.renderActionButtons()}
+                {this.state.text !== '' && (
+                    <>
+                        {this.renderTagPicker()}
+                        {this.renderActionButtons()}
+                    </>
+                )}
             </TextBoxContainerStyled>
         )
     }
@@ -209,7 +236,8 @@ const StyledTextArea = styled.textarea`
     border: none;
     padding: 10px 7px;
     margin: 10px 10px 5px 10px;
-    min-height: 100px;
+    height: ${(props) => (props.value === '' ? '40px' : '150px')};
+
     width: auto;
 
     &::placeholder {
@@ -230,7 +258,7 @@ const StyledTextArea = styled.textarea`
 const FooterStyled = styled.div`
     display: flex;
     flex-direction: row-reverse;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     margin: 0px 12px 4px 12px;
     height: 26px;

@@ -1,5 +1,7 @@
 import { featuresBeta } from 'src/util/remote-functions-background'
 import ToggleSwitch from 'src/common-ui/components/ToggleSwitch'
+import { TaskState } from 'ui-logic-core/lib/types'
+
 import React from 'react'
 import {
     TypographyHeadingBig,
@@ -37,6 +39,8 @@ interface State {
     featureOptions: UserBetaFeature[]
     featureEnabled: { [key in UserBetaFeatureId]: boolean }
     loadingChargebee: boolean
+    isPioneer?: boolean
+    loadState: TaskState
 }
 
 class BetaFeaturesScreen extends React.Component<
@@ -44,13 +48,21 @@ class BetaFeaturesScreen extends React.Component<
     State
 > {
     state = {
+        loadState: 'running',
         featureOptions: {},
         featureEnabled: {},
         loadingChargebee: false,
+        isPioneer: false,
     } as State
 
     componentDidMount = async () => {
         await this.refreshFeatures()
+        const isBetaAuthorized = await auth.isAuthorizedForFeature('beta')
+
+        this.setState({
+            loadState: 'success',
+            isPioneer: isBetaAuthorized,
+        })
     }
 
     openPortal = async () => {
@@ -82,24 +94,10 @@ class BetaFeaturesScreen extends React.Component<
     }
 
     private renderUpgradeBtn() {
-        if (this.state.loadingChargebee) {
-            return (
-                <PrimaryAction
-                    label={<LoadingIndicator />}
-                    onClick={undefined}
-                />
-            )
-        }
-
         return (
             <PrimaryAction
-                label="Request Access"
-                onClick={() => {
-                        window.open(
-                            'https://worldbrain.io/beta',
-                        )
-                    }
-                }
+                label="Activate"
+                onClick={this.props.showBetaFeatureNotifModal}
             />
         )
     }
@@ -114,35 +112,33 @@ class BetaFeaturesScreen extends React.Component<
                                 Beta Features
                             </TypographyHeadingBigger>
 
-                            {this.props.currentUser?.authorizedFeatures?.includes(
-                                'beta',
+                            {(this.state.isPioneer &&  this.state.loadState === 'success'
                             ) ? (
                                 <TypographyTextNormal>
-                                    You're signed up for using the beta features.<br/>
+                                    👍 You're set up for using the beta
+                                    features.
+                                    <br />
                                 </TypographyTextNormal>
                             ) : (
                                 <div>
                                     <TypographyTextNormal>
                                         Access beta features by
                                         <TypographyLink
-                                            onClick={() => {
-                                                window.open(
-                                                    'https://worldbrain.io/beta',
-                                                )
-                                            }}
+                                            onClick={
+                                                this.props
+                                                    .showBetaFeatureNotifModal
+                                            }
                                         >
-                                            requesting free access via a wait list.
+                                            requesting free access via a wait
+                                            list.
                                         </TypographyLink>
                                     </TypographyTextNormal>
                                 </div>
                             )}
                         </div>
                         <div className={settingsStyle.buttonBox}>
-                            {!this.props.currentUser?.authorizedFeatures?.includes(
-                                'beta',
-                            ) && (
-                                this.renderUpgradeBtn()
-                            )}
+                            {(!this.state.isPioneer &&  this.state.loadState === 'success'
+                             ) && this.renderUpgradeBtn()}
                             <SecondaryAction
                                 onClick={() =>
                                     window.open(
@@ -188,42 +184,19 @@ class BetaFeaturesScreen extends React.Component<
                                                     settingsStyle.buttonArea
                                                 }
                                             >
-                                            {feature.link &&
-                                                <div
-                                                    className={
-                                                        settingsStyle.readMoreButton
-                                                    }
-                                                    onClick={() => {
-                                                        window.open(
-                                                            feature.link,
-                                                        )
-                                                    }}
-                                                >
-                                                    Read More
-                                                </div>
-                                                }
-                                                {this.props.currentUser?.authorizedFeatures?.includes(
-                                                    'beta',
-                                                ) ? (
-                                                    <ToggleSwitch
-                                                        isChecked={
-                                                            this.state
-                                                                .featureEnabled[
-                                                                feature.id
-                                                            ]
+                                                {feature.link && (
+                                                    <div
+                                                        className={
+                                                            settingsStyle.readMoreButton
                                                         }
-                                                        onChange={this.toggleFeature(
-                                                            feature.id,
-                                                        )}
-                                                    />
-                                                ) : (
-                                                    <ToggleSwitch
-                                                        isChecked={false}
-                                                        onChange={
-                                                            this.props
-                                                                .showBetaFeatureNotifModal
-                                                        }
-                                                    />
+                                                        onClick={() => {
+                                                            window.open(
+                                                                feature.link,
+                                                            )
+                                                        }}
+                                                    >
+                                                        Read More
+                                                    </div>
                                                 )}
                                             </div>
                                         </div>
@@ -264,20 +237,20 @@ class BetaFeaturesScreen extends React.Component<
                                                         settingsStyle.buttonArea
                                                     }
                                                 >
-                                                {feature.link &&
-                                                    <div
-                                                        className={
-                                                            settingsStyle.readMoreButton
-                                                        }
-                                                        onClick={() => {
-                                                            window.open(
-                                                                feature.link,
-                                                            )
-                                                        }}
-                                                    >
-                                                        Read More
-                                                    </div>
-                                                }
+                                                    {feature.link && (
+                                                        <div
+                                                            className={
+                                                                settingsStyle.readMoreButton
+                                                            }
+                                                            onClick={() => {
+                                                                window.open(
+                                                                    feature.link,
+                                                                )
+                                                            }}
+                                                        >
+                                                            Read More
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </div>
                                         </section>
@@ -295,5 +268,10 @@ export default connect(null, (dispatch) => ({
     showSubscriptionModal: () => dispatch(show({ modalId: 'Subscription' })),
     toggleBetaFeatures: (val) => dispatch(resultsActs.setBetaFeatures(val)),
     showBetaFeatureNotifModal: () =>
-        dispatch(show({ modalId: 'BetaFeatureNotifModal' })),
+        dispatch(
+            show({
+                modalId: 'BetaFeatureNotifModal',
+                options: { initWithAuth: true },
+            }),
+        ),
 }))(withCurrentUser(BetaFeaturesScreen))

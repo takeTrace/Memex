@@ -1,3 +1,4 @@
+import { TaskState } from 'ui-logic-core/lib/types'
 import React, { PureComponent } from 'react'
 import styled from 'styled-components'
 
@@ -6,31 +7,31 @@ import {
     TypographyTextNormal,
     TypographyHeadingBigger,
 } from 'src/common-ui/components/design-library/typography'
+import * as icons from 'src/common-ui/components/design-library/icons'
 
 import { PrimaryAction } from 'src/common-ui/components/design-library/actions/PrimaryAction'
 import { SecondaryAction } from 'src/common-ui/components/design-library/actions/SecondaryAction'
-import { formBackground } from 'src/common-ui/components/design-library/colors'
+import { SignInScreen } from 'src/authentication/components/SignIn'
+import { LoadingIndicator } from 'src/common-ui/components'
+import { runInBackground } from 'src/util/webextensionRPC'
+import { ContentScriptsInterface } from 'src/content-scripts/background/types'
 
 export interface Props {
     showSubscriptionModal: () => void
+    betaRequestStrategy?: 'go-to-options-page' | 'sign-in'
+    initWithAuth?: boolean
 }
 
 interface State {
-    isPioneer: boolean
-    hasSubscription: boolean
-    loadingChargebee: boolean
+    loadState: TaskState
+    chargebeeState: TaskState
+    betaActivationState: TaskState
+    isAuthenticated?: boolean
+    isAuthenticating?: boolean
+    isPioneer?: boolean
+    hasSubscription?: boolean
 }
 
-const NameInput = styled.input`
-    background-color: ${formBackground};
-    border-radius: 3px;
-    outline: none;
-    border: none;
-    width: 300px;
-    height: 35px;
-    margin: 0 0 20px 0;
-    text-align: center;
-`
 const InstructionsContainer = styled.div`
     display: flex;
     flex-direction: row;
@@ -61,16 +62,6 @@ const ButtonBox = styled.div`
     align-items: center;
 `
 
-const InputContainer = styled.div`
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-`
-
-const TypographyTextNormalAlert = styled(TypographyTextNormal)`
-    color: red;
-`
-
 const Margin = styled.div`
     margin-bottom: 20px;
 `
@@ -88,57 +79,148 @@ const InfoBox = styled.div`
         margin-right: 5px;
     }
 `
+const IconStyled = styled.img`
+    border: none;
+    z-index: 2500;
+    outline: none;
+    border-radius: 3px;
+    width: 30px;
+    height: 30px;
+    margin-bottom: 20px;
+`
+
+const SuccessBox = styled.div`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+`
 
 export default class BetaFeatureNotif extends PureComponent<Props, State> {
+    static defaultProps: Partial<Props> = {
+        betaRequestStrategy: 'sign-in',
+    }
+
     state: State = {
-        loadingChargebee: false,
-        hasSubscription: false,
-        isPioneer: false,
+        loadState: 'running',
+        chargebeeState: 'pristine',
+        betaActivationState: 'pristine',
+        isAuthenticating: this.props.initWithAuth,
     }
 
     get isUnauthorizedUser(): boolean {
         return this.state.hasSubscription && !this.state.isPioneer
     }
 
-    componentDidMount() {
-        this.upgradeState()
-    }
-
-    private openPortal = async () => {
-        this.setState({ loadingChargebee: true })
-        const portalLink = await subscription.getManageLink()
-        window.open(portalLink['access_url'])
-        this.setState({ loadingChargebee: false })
-    }
-
-    private async upgradeState() {
+    async componentDidMount() {
+        const user = await auth.getCurrentUser()
         const plans = await auth.getAuthorizedPlans()
         const isBetaAuthorized = await auth.isAuthorizedForFeature('beta')
 
         this.setState({
+            loadState: 'success',
+            isAuthenticated: !!user,
             isPioneer: isBetaAuthorized,
             hasSubscription: plans.length > 0,
         })
+
+        if (this.props.initWithAuth) {
+            if (await this.state.isAuthenticated) {
+                this.activateBeta()
+            } else {
+                this.setState({ isAuthenticating: true })
+            }
+        }
+
+    }
+
+    private openPortal = async () => {
+        this.setState({ chargebeeState: 'running' })
+        const portalLink = await subscription.getManageLink()
+        window.open(portalLink['access_url'])
+        this.setState({ chargebeeState: 'pristine' })
+    }
+
+    onRequestAccess = () => {
+        if (this.props.betaRequestStrategy === 'go-to-options-page') {
+            runInBackground<
+                ContentScriptsInterface<'caller'>
+            >().openBetaFeatureSettings()
+            return
+        }
+
+        if (this.state.isAuthenticated) {
+            this.activateBeta()
+        } else {
+            this.setState({ isAuthenticating: true })
+        }
+    }
+
+    async activateBeta() {
+        this.setState({ betaActivationState: 'running' })
+        await new Promise((resolve) => setTimeout(resolve, 1000))
+        const isBetaAuthorized = await auth.isAuthorizedForFeature('beta')
+        if (!isBetaAuthorized) {
+            await auth.setBetaEnabled(true)
+        }
+        this.setState({ betaActivationState: 'success' })
+    }
+
+    onSignInSucces = () => {
+        this.setState({ isAuthenticating: false })
+        this.activateBeta()
+    }
+
+    onSignInFail = () => {
+        this.setState({ isAuthenticating: false })
     }
 
     render() {
+        if (this.state.loadState === 'running') {
+            return null
+        }
+        if (this.state.betaActivationState === 'running') {
+            return <LoadingIndicator />
+        }
+        if (this.state.betaActivationState === 'success') {
+            return (
+                <SuccessBox>
+                    <IconStyled src={icons.saveIcon} />
+                    <TypographyHeadingBigger>
+                        You're set.
+                    </TypographyHeadingBigger>
+                    <TypographyTextNormal>
+                        You can now use Memex beta features.
+                    </TypographyTextNormal>
+                </SuccessBox>
+            )
+        }
+
+        if (this.state.isAuthenticating) {
+            return (
+                <SignInScreen
+                    onSuccess={this.onSignInSucces}
+                    onFail={this.onSignInFail}
+                />
+            )
+        }
+
         return (
             <InstructionsContainer>
                 <InstructionsBox>
                     <TypographyHeadingBigger>
-                        🚀 This is a beta feature
+                        🚀 This is a Beta Feature
                     </TypographyHeadingBigger>
                     <TypographyTextNormal>
-                        Request access to use the beta features.{' '}
+                        Request early access and start using it.{' '}
                     </TypographyTextNormal>
                     <Margin />
                     <>
                         <ButtonBox>
                             <PrimaryAction
-                                label="Request Free Access"
-                                onClick={()=> window.open(
-                                                  'https://worldbrain.io/beta',
-                                          )}
+                                label="Request Access"
+                                onClick={this.onRequestAccess}
                             />
                             <SecondaryAction
                                 label="Watch Demo"
@@ -149,12 +231,6 @@ export default class BetaFeatureNotif extends PureComponent<Props, State> {
                                 }
                             />
                         </ButtonBox>
-                        {this.isUnauthorizedUser && (
-                            <InfoBox>
-                                To upgrade go to "Edit Subscription" and add the
-                                "Pioneer Support" addon
-                            </InfoBox>
-                        )}
                     </>
                 </InstructionsBox>
             </InstructionsContainer>
