@@ -94,37 +94,32 @@ export async function main() {
     })
     const loadAnnotationsPromise = annotationsCache.load(getPageUrl())
 
+    const annotationFunctionsParams = {
+        inPageUI,
+        annotationsCache,
+        getSelection: () => document.getSelection(),
+        getUrlAndTitle: () => ({
+            title: getPageTitle(),
+            pageUrl: getPageUrl(),
+        }),
+    }
+
     const annotationsFunctions = {
         createHighlight: (
             analyticsEvent?: AnalyticsEvent<'Highlights'>,
-        ) => (options?: { clickToEdit: boolean }) =>
+        ) => () =>
             highlightRenderer.saveAndRenderHighlight({
-                annotationsCache,
-                getUrlAndTitle: () => ({
-                    title: getPageTitle(),
-                    pageUrl: getPageUrl(),
-                }),
-                getSelection: () => document.getSelection(),
-                onClickHighlight: ({ annotationUrl }) =>
-                    inPageUI.showSidebar({
-                        annotationUrl,
-                        action: options?.clickToEdit
-                            ? 'edit_annotation'
-                            : 'show_annotation',
-                    }),
+                ...annotationFunctionsParams,
                 analyticsEvent,
+                options: { clickToEdit: true },
             }),
         createAnnotation: (
             analyticsEvent?: AnalyticsEvent<'Annotations'>,
         ) => () =>
-            highlightRenderer.createAnnotationWithSidebar({
-                getSelection: () => document.getSelection(),
-                getUrlAndTitle: () => ({
-                    title: getPageTitle(),
-                    pageUrl: getPageUrl(),
-                }),
-                inPageUI,
+            highlightRenderer.saveAndRenderHighlightAndEditInSidebar({
+                ...annotationFunctionsParams,
                 analyticsEvent,
+                options: { clickToEdit: true },
             }),
     }
 
