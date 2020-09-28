@@ -111,7 +111,6 @@ export async function main() {
             highlightRenderer.saveAndRenderHighlight({
                 ...annotationFunctionsParams,
                 analyticsEvent,
-                options: { clickToEdit: true },
             }),
         createAnnotation: (
             analyticsEvent?: AnalyticsEvent<'Annotations'>,
@@ -119,7 +118,6 @@ export async function main() {
             highlightRenderer.saveAndRenderHighlightAndEditInSidebar({
                 ...annotationFunctionsParams,
                 analyticsEvent,
-                options: { clickToEdit: true },
             }),
     }
 
@@ -238,7 +236,7 @@ export async function main() {
     // 6. Setup other interactions with this page (things that always run)
     setupScrollReporter()
     loadAnnotationWhenReady()
-    setupRemoteDirectLinkFunction()
+    setupRemoteDirectLinkFunction({ highlightRenderer })
     initKeyboardShortcuts({
         inPageUI,
         createHighlight: annotationsFunctions.createHighlight({
