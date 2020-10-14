@@ -7,10 +7,12 @@ import {
     RibbonContainerLogic,
     INITIAL_RIBBON_COMMENT_BOX_STATE,
     RibbonContainerOptions,
+    RibbonLogicOptions,
 } from './logic'
 import { Annotation } from 'src/annotations/types'
 import { SharedInPageUIState } from 'src/in-page-ui/shared-state/shared-in-page-ui-state'
 import { createAnnotationsCache } from 'src/annotations/annotations-cache'
+import { FocusableComponent } from 'src/annotations/components/types'
 
 function insertBackgroundFunctionTab(remoteFunctions, tab: any) {
     return mapValues(remoteFunctions, (f) => {
@@ -25,9 +27,9 @@ describe('Ribbon logic', () => {
 
     async function setupTest(
         device: UILogicTestDevice,
-        options?: {
-            dependencies?: Partial<RibbonContainerOptions>
-        },
+        options: {
+            dependencies?: Partial<RibbonLogicOptions>
+        } = {},
     ) {
         const { backgroundModules } = device
         const currentTab = {
@@ -60,15 +62,16 @@ describe('Ribbon logic', () => {
             setRibbonShouldAutoHide: () => undefined,
             getSidebarEnabled: async () => true,
             setSidebarEnabled: async () => {},
+            focusCreateForm:
+                options.dependencies?.focusCreateForm ?? (() => undefined),
             inPageUI,
             currentTab,
             highlighter,
             annotationsManager,
             getRemoteFunction: () => async () => {},
-            bookmarks: backgroundModules.search.remoteFunctions.bookmarks,
+            bookmarks: backgroundModules.bookmarks.remoteFunctions,
             tags: backgroundModules.tags.remoteFunctions,
             customLists: backgroundModules.customLists.remoteFunctions,
-            activityLogger: backgroundModules.activityLogger.remoteFunctions,
             annotations,
             ...(options?.dependencies ?? {}),
             tooltip: {
@@ -147,10 +150,10 @@ describe('Ribbon logic', () => {
 
         // TODO: Once we make page indexing more testable, fully test down to the DB level
         let hasBookmark = false
-        device.backgroundModules.search.remoteFunctions.bookmarks.addPageBookmark = async () => {
+        device.backgroundModules.bookmarks.remoteFunctions.addPageBookmark = async () => {
             hasBookmark = true
         }
-        device.backgroundModules.search.remoteFunctions.bookmarks.delPageBookmark = async () => {
+        device.backgroundModules.bookmarks.remoteFunctions.delPageBookmark = async () => {
             hasBookmark = false
         }
         await ribbon.init()
@@ -217,8 +220,9 @@ describe('Ribbon logic', () => {
         expect(arePopupsOpen).toBe(false)
     })
 
-    it('should save a comment that is bookmarked', async ({ device }) => {
+    it('should save a comment', async ({ device }) => {
         const { ribbon, ribbonLogic } = await setupTest(device)
+        const COMMENT_TEXT = 'comment'
 
         await ribbon.init()
         expect(ribbon.state.commentBox).toEqual(
@@ -230,43 +234,107 @@ describe('Ribbon logic', () => {
             ...INITIAL_RIBBON_COMMENT_BOX_STATE,
             showCommentBox: true,
         })
+        await ribbon.processEvent('changeComment', { value: COMMENT_TEXT })
+        expect(ribbon.state.commentBox.commentText).toEqual(COMMENT_TEXT)
 
         ribbonLogic.commentSavedTimeout = 1
-        await ribbon.processEvent('saveComment', {
-            value: {
-                isBookmarked: true,
-                text: 'comment',
-                tags: [],
-            },
-        })
+        await ribbon.processEvent('saveComment', null)
+
         expect(ribbon.state.commentBox).toEqual({
             ...INITIAL_RIBBON_COMMENT_BOX_STATE,
         })
-        const annotations: Annotation[] = await device.storageManager
-            .collection('annotations')
-            .findObjects({})
-        expect(annotations).toEqual([
+
+        expect(
+            await device.storageManager
+                .collection('annotations')
+                .findObjects({}),
+        ).toEqual([
             expect.objectContaining({
+                comment: COMMENT_TEXT,
                 pageTitle: 'Foo.com: Home',
                 pageUrl: 'foo.com',
             }),
         ])
 
         expect(
-            await device.storageManager
-                .collection('annotBookmarks')
-                .findObjects({}),
-        ).toEqual([
+            await device.storageManager.collection('tags').findObjects({}),
+        ).toEqual([])
+    })
+
+    it('should save a comment with tags', async ({ device }) => {
+        const { ribbon, ribbonLogic } = await setupTest(device)
+        const COMMENT_TEXT = 'comment'
+        const TAGS = ['a', 'b', 'c']
+
+        await ribbon.init()
+        expect(ribbon.state.commentBox).toEqual(
+            INITIAL_RIBBON_COMMENT_BOX_STATE,
+        )
+
+        await ribbon.processEvent('setShowCommentBox', { value: true })
+        expect(ribbon.state.commentBox).toEqual({
+            ...INITIAL_RIBBON_COMMENT_BOX_STATE,
+            showCommentBox: true,
+        })
+        await ribbon.processEvent('changeComment', { value: COMMENT_TEXT })
+        expect(ribbon.state.commentBox.commentText).toEqual(COMMENT_TEXT)
+        await ribbon.processEvent('updateCommentBoxTags', { value: TAGS })
+        expect(ribbon.state.commentBox.tags).toEqual(TAGS)
+
+        ribbonLogic.commentSavedTimeout = 1
+        await ribbon.processEvent('saveComment', null)
+
+        expect(ribbon.state.commentBox).toEqual({
+            ...INITIAL_RIBBON_COMMENT_BOX_STATE,
+        })
+
+        const annotations: Annotation[] = await device.storageManager
+            .collection('annotations')
+            .findObjects({})
+
+        expect(annotations).toEqual([
             expect.objectContaining({
-                url: annotations[0].url,
+                comment: COMMENT_TEXT,
+                pageTitle: 'Foo.com: Home',
+                pageUrl: 'foo.com',
             }),
         ])
+
+        expect(
+            await device.storageManager.collection('tags').findObjects({}),
+        ).toEqual(
+            expect.arrayContaining([
+                { url: annotations[0].url, name: TAGS[0] },
+                { url: annotations[0].url, name: TAGS[1] },
+                { url: annotations[0].url, name: TAGS[2] },
+            ]),
+        )
+    })
+
+    it('should be able to set focus on comment box', async ({ device }) => {
+        let isCreateFormFocused = false
+
+        const { ribbon } = await setupTest(device, {
+            dependencies: {
+                focusCreateForm: () => {
+                    isCreateFormFocused = true
+                },
+            },
+        })
+
+        await ribbon.init()
+
+        expect(isCreateFormFocused).toBe(false)
+        await ribbon.processEvent('setShowCommentBox', { value: false })
+        expect(isCreateFormFocused).toBe(false)
+        await ribbon.processEvent('setShowCommentBox', { value: true })
+        expect(isCreateFormFocused).toBe(true)
     })
 
     it('should rehydrate state on URL change', async ({ device }) => {
         const pageBookmarksMockDB: { [url: string]: boolean } = {}
 
-        device.backgroundModules.search.remoteFunctions.bookmarks = {
+        device.backgroundModules.bookmarks.remoteFunctions = {
             pageHasBookmark: async (url) => pageBookmarksMockDB[url] ?? false,
             addPageBookmark: async (args) => {
                 pageBookmarksMockDB[args.url] = true

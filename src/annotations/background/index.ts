@@ -1,6 +1,10 @@
 import Storex from '@worldbrain/storex'
 import { Tabs, Browser } from 'webextension-polyfill-ts'
-import { normalizeUrl, URLNormalizer } from '@worldbrain/memex-url-utils'
+import {
+    normalizeUrl,
+    isFullUrl,
+    URLNormalizer,
+} from '@worldbrain/memex-url-utils'
 
 import {
     makeRemotelyCallable,
@@ -31,6 +35,8 @@ import { updateSuggestionsCache } from 'src/tags/utils'
 import { TagsSettings } from 'src/tags/background/types'
 import { limitSuggestionsStorageLength } from 'src/tags/background'
 import { generateUrl } from 'src/annotations/utils'
+import { PageIndexingBackground } from 'src/page-indexing/background'
+import { Analytics } from 'src/analytics/types'
 
 interface TabArg {
     tab: Tabs.Tab
@@ -50,10 +56,10 @@ export default class DirectLinkingBackground {
         private options: {
             browserAPIs: Pick<Browser, 'tabs' | 'storage' | 'webRequest'>
             storageManager: Storex
-            pageStorage: PageStorage
+            pages: PageIndexingBackground
             socialBg: SocialBG
-            searchIndex: SearchIndex
             normalizeUrl?: URLNormalizer
+            analytics: Analytics
         },
     ) {
         this.socialBg = options.socialBg
@@ -61,9 +67,6 @@ export default class DirectLinkingBackground {
 
         this.annotationStorage = new AnnotationStorage({
             storageManager: options.storageManager,
-            browserStorageArea: options.browserAPIs.storage.local,
-            searchIndex: options.searchIndex,
-            pageStorage: options.pageStorage,
         })
 
         this._normalizeUrl = options.normalizeUrl || normalizeUrl
@@ -257,9 +260,6 @@ export default class DirectLinkingBackground {
             comment: '',
         })
 
-        // Attempt to (re-)index, if user preference set, but don't wait for it
-        this.annotationStorage.indexPageFromTab(tab)
-
         return result
     }
 
@@ -340,25 +340,40 @@ export default class DirectLinkingBackground {
     }
 
     async createAnnotation(
-        { tab }: TabArg,
+        { tab }: { tab: Pick<Tabs.Tab, 'id' | 'url' | 'title'> },
         toCreate: CreateAnnotationParams,
         { skipPageIndexing }: { skipPageIndexing?: boolean } = {},
     ) {
-        let pageUrl = this._normalizeUrl(
-            toCreate.pageUrl == null ? tab.url : toCreate.pageUrl,
-        )
+        let fullPageUrl = tab?.url ?? toCreate.pageUrl
+        if (!isFullUrl(fullPageUrl)) {
+            fullPageUrl = toCreate.pageUrl
+            if (!isFullUrl(fullPageUrl)) {
+                throw new Error(
+                    'Could not get full URL while creating annotation',
+                )
+            }
+        }
 
+        let normalizedPageUrl = this._normalizeUrl(fullPageUrl)
         if (toCreate.isSocialPost) {
-            pageUrl = await this.lookupSocialId(pageUrl)
+            normalizedPageUrl = await this.lookupSocialId(normalizedPageUrl)
         }
 
         const pageTitle = toCreate.title == null ? tab.title : toCreate.title
-        const url =
-            toCreate.url ?? generateUrl({ pageUrl, now: () => Date.now() })
+        const annotationUrl =
+            toCreate.url ??
+            generateUrl({ pageUrl: normalizedPageUrl, now: () => Date.now() })
 
+        if (!skipPageIndexing) {
+            await this.options.pages.indexPage({
+                fullUrl: fullPageUrl,
+                visitTime: '$now',
+                tabId: tab?.id,
+            })
+        }
         await this.annotationStorage.createAnnotation({
-            pageUrl,
-            url,
+            pageUrl: normalizedPageUrl,
+            url: annotationUrl,
             pageTitle,
             comment: toCreate.comment,
             body: toCreate.body,
@@ -366,38 +381,47 @@ export default class DirectLinkingBackground {
             createdWhen: new Date(toCreate.createdWhen ?? Date.now()),
         })
 
-        // Attempt to (re-)index, if user preference set, but don't wait for it
-        if (!skipPageIndexing) {
-            this.annotationStorage.indexPageFromTab(tab)
-        }
-
         if (toCreate.isBookmarked) {
-            await this.toggleAnnotBookmark({ tab }, { url })
+            await this.toggleAnnotBookmark({ tab }, { url: annotationUrl })
         }
 
-        return url
+        if (toCreate.comment && !toCreate.body) {
+            this.options.analytics.trackEvent({
+                category: 'Notes',
+                action: 'createNoteGlobally',
+            })
+        }
+
+        if (!toCreate.comment && toCreate.body) {
+            this.options.analytics.trackEvent({
+                category: 'Highlights',
+                action: 'createHighlightGlobally',
+            })
+        }
+
+        return annotationUrl
     }
 
-    async insertAnnotToList({ tab }: TabArg, params: AnnotListEntry) {
-        params.url = params.url == null ? tab.url : params.url
-
+    async insertAnnotToList(_, params: AnnotListEntry) {
         return this.annotationStorage.insertAnnotToList(params)
     }
 
-    async removeAnnotFromList({ tab }: TabArg, params: AnnotListEntry) {
-        params.url = params.url == null ? tab.url : params.url
+    async getAnnotationByPk(pk) {
+        return this.annotationStorage.getAnnotationByPk(pk)
+    }
 
+    async removeAnnotFromList(_, params: AnnotListEntry) {
         return this.annotationStorage.removeAnnotFromList(params)
     }
 
-    async toggleAnnotBookmark({ tab }: TabArg, { url }: { url: string }) {
+    async toggleAnnotBookmark(_, { url }: { url: string }) {
         return this.annotationStorage.toggleAnnotBookmark({ url })
     }
-    async getAnnotBookmark({ tab }: TabArg, { url }: { url: string }) {
+    async getAnnotBookmark(_, { url }: { url: string }) {
         return this.annotationStorage.annotHasBookmark({ url })
     }
     async updateAnnotationBookmark(
-        { tab }: TabArg,
+        _,
         { url, isBookmarked }: { url: string; isBookmarked: boolean },
     ) {
         return this.annotationStorage.updateAnnotationBookmark({
@@ -411,6 +435,14 @@ export default class DirectLinkingBackground {
             pk = await this.lookupSocialId(pk)
         }
 
+        const existingAnnotation = await this.getAnnotationByPk(pk)
+
+        if (!existingAnnotation?.comment?.length) {
+            this.options.analytics.trackEvent({
+                category: 'Annotations',
+                action: 'createAnnotationGlobally',
+            })
+        }
         return this.annotationStorage.editAnnotation(pk, comment)
     }
 
