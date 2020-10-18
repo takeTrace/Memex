@@ -6,20 +6,28 @@ import cx from 'classnames'
 
 import { actions, selectors } from 'src/custom-lists'
 import extStyles from './Index.css'
-import MyCollection from './my-collections'
 import CreateListForm from './CreateListForm'
 import ListItem from './list-item'
 import DeleteConfirmModal from 'src/overview/delete-confirm-modal/components/DeleteConfirmModal'
-import { actions as filterActs } from 'src/search-filters'
+import { actions as filterActs, selectors as filters } from 'src/search-filters'
 import { selectors as sidebar } from 'src/overview/sidebar-left'
 import { auth, contentSharing } from 'src/util/remote-functions-background'
+import { StaticListItem } from './static-list-item'
 import { show } from 'src/overview/modals/actions'
+import { SPECIAL_LIST_NAMES } from '@worldbrain/memex-storage/lib/lists/constants'
+
+const styles = require('./Index.css')
 
 class ListContainer extends Component {
     static propTypes = {
         getListFromDB: PropTypes.func.isRequired,
+        inboxUnreadCount: PropTypes.number.isRequired,
+        getInboxUnreadCount: PropTypes.func.isRequired,
         lists: PropTypes.array.isRequired,
+        specialLists: PropTypes.array.isRequired,
         handleEditBtnClick: PropTypes.func.isRequired,
+        handleAllSavedClick: PropTypes.func.isRequired,
+        isListFilterActive: PropTypes.bool.isRequired,
         isDeleteConfShown: PropTypes.bool.isRequired,
         resetListDeleteModal: PropTypes.func.isRequired,
         handleCrossBtnClick: PropTypes.func.isRequired,
@@ -52,6 +60,8 @@ class ListContainer extends Component {
     }
 
     async componentDidMount() {
+        this.props.getInboxUnreadCount()
+
         // Gets all the list from the DB to populate the sidebar.
         this.props.getListFromDB()
 
@@ -141,11 +151,10 @@ class ListContainer extends Component {
                     key={i}
                     listId={list.id}
                     listName={list.name}
-                    isMobileList={list.isMobileList}
                     isFiltered={list.isFilterIndex}
                     onShareButtonClick={this.handleShareButtonClick(i)}
                     onEditButtonClick={this.props.handleEditBtnClick(i)}
-                    onListItemClick={this.props.handleListItemClick(list, i)}
+                    onListItemClick={this.props.handleListItemClick(list)}
                     onAddPageToList={this.props.handleAddPageList(list, i)}
                     onCrossButtonClick={this.props.handleCrossBtnClick(list, i)}
                     resetUrlDragged={this.props.resetUrlDragged}
@@ -153,6 +162,28 @@ class ListContainer extends Component {
             )
         })
     }
+
+    renderSpecialLists = () => [
+        <StaticListItem
+            key={0}
+            listName="All Saved"
+            isFiltered={!this.props.isListFilterActive}
+            onListItemClick={this.props.handleAllSavedClick}
+        />,
+        ...this.props.specialLists.map((list, i) => (
+            <StaticListItem
+                key={i + 1}
+                listName={list.name}
+                isFiltered={list.isFilterIndex}
+                onListItemClick={this.props.handleListItemClick(list)}
+                unreadCount={
+                    list.name === SPECIAL_LIST_NAMES.INBOX
+                        ? this.props.inboxUnreadCount
+                        : undefined
+                }
+            />
+        )),
+    ]
 
     renderCreateList = (shouldDisplayForm, value = null) =>
         shouldDisplayForm && (
@@ -169,10 +200,22 @@ class ListContainer extends Component {
     render() {
         return (
             <React.Fragment>
-                <MyCollection
-                    isSidebarLocked={this.props.isSidebarLocked}
-                    handleRenderCreateList={this.props.toggleCreateListForm}
-                />
+                {this.renderSpecialLists()}
+                <div
+                    className={styles.collection}
+                    onClick={this.props.toggleCreateListForm}
+                >
+                    <div
+                        className={cx(styles.addNew, {
+                            [styles.addNewHover]: this.props.isSidebarLocked,
+                        })}
+                    >
+                        <span className={styles.myCollection}>
+                            My Collections{' '}
+                        </span>
+                        <span className={styles.plus} />
+                    </div>
+                </div>
 
                 {this.renderCreateList(this.props.showCreateList)}
                 <div
@@ -189,7 +232,7 @@ class ListContainer extends Component {
                                 .isSidebarLocked,
                         })}
                     >
-                        {this.props.lists.length === 1 ? (
+                        {this.props.lists.length === 0 ? (
                             <div>
                                 {this.renderAllLists()}
                                 <div className={extStyles.noLists}>
@@ -218,13 +261,17 @@ class ListContainer extends Component {
 }
 
 const mapStateToProps = (state) => ({
-    lists: selectors.results(state),
+    lists: selectors.createdDisplayLists(state),
+    specialLists: selectors.specialDisplayLists(state),
     isDeleteConfShown: selectors.isDeleteConfShown(state),
     shareModalProps: selectors.shareModalProps(state),
     showCreateList: selectors.showCreateListForm(state),
     showCommonNameWarning: selectors.showCommonNameWarning(state),
     isSidebarOpen: sidebar.isSidebarOpen(state),
     isSidebarLocked: sidebar.sidebarLocked(state),
+    isListFilterActive: filters.listFilterActive(state),
+    lstFilter: filters.listIdFilter(state),
+    inboxUnreadCount: selectors.inboxUnreadCount(state),
 })
 
 const mapDispatchToProps = (dispatch, ownProps) => ({
@@ -240,19 +287,20 @@ const mapDispatchToProps = (dispatch, ownProps) => ({
         },
         dispatch,
     ),
+    getInboxUnreadCount: () => dispatch(actions.getInboxUnreadCount()),
     handleEditBtnClick: (index) => (event) => {
         event.preventDefault()
         dispatch(actions.showEditBox(index))
     },
     handleCrossBtnClick: ({ id }, index) => (event) => {
         event.preventDefault()
-        dispatch(actions.showListDeleteModal(id, index - 1))
+        dispatch(actions.showListDeleteModal(id, index))
     },
-    handleListItemClick: ({ id, isMobileList }, index) => () => {
-        dispatch(actions.toggleListFilterIndex(index))
+    handleListItemClick: ({ id, name, isMobileList }) => () => {
         dispatch(
             filterActs.toggleListFilter({
                 id,
+                name,
                 isMobileListFiltered: isMobileList,
             }),
         )
@@ -262,6 +310,7 @@ const mapDispatchToProps = (dispatch, ownProps) => ({
             dispatch(actions.addUrltoList(url, isSocialPost, index, id))
         }
     },
+    handleAllSavedClick: () => dispatch(filterActs.delListFilter()),
     handleDeleteList: (e) => {
         e.preventDefault()
         dispatch(actions.deletePageList())

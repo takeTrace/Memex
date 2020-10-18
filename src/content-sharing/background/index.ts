@@ -286,7 +286,7 @@ export default class ContentSharingBackground {
             queueInteraction: options.queueInteraction ?? 'queue-and-await',
         })
 
-         this.options.analytics.trackEvent({
+        this.options.analytics.trackEvent({
             category: 'ContentSharing',
             action: 'shareAnnotation',
         })

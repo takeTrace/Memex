@@ -31,7 +31,6 @@ interface DispatchProps {
 export type Props = OwnProps & StateProps & DispatchProps
 
 class BookmarkButton extends PureComponent<Props> {
-
     private renderUnblacklisted() {
         return (
             <Button
@@ -79,7 +78,7 @@ class BookmarkButton extends PureComponent<Props> {
     }
 }
 
-const mapState: MapStateToProps<StateProps, OwnProps, RootState> = state => ({
+const mapState: MapStateToProps<StateProps, OwnProps, RootState> = (state) => ({
     shouldShowChoice: selectors.showBlacklistChoice(state),
     isBlacklisted: selectors.isBlacklisted(state),
     isDisabled: !popup.isLoggable(state),
@@ -87,11 +86,11 @@ const mapState: MapStateToProps<StateProps, OwnProps, RootState> = state => ({
 })
 
 const mapDispatch = (dispatch): DispatchProps => ({
-    handleBtnClick: event => {
+    handleBtnClick: (event) => {
         event.preventDefault()
         dispatch(acts.setShowBlacklistChoice(true))
     },
-    handleBlacklistingChoice: isDomainChoice => event => {
+    handleBlacklistingChoice: (isDomainChoice) => (event) => {
         event.preventDefault()
         dispatch(acts.addURLToBlacklist(isDomainChoice))
     },

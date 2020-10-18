@@ -39,6 +39,7 @@ const defaultState = {
     showCreateListForm: false,
     showCommonNameWarning: false,
     showCrowdFundingModal: false,
+    inboxUnreadCount: 0,
     shareModalProps: {
         isShown: false,
         index: undefined,
@@ -68,9 +69,9 @@ const updateList = (state, { value, index }) => ({
     ],
 })
 
-const deleteList = (state, { id, index }) => ({
+const deleteList = (state, { id }) => ({
     ...state,
-    lists: [...state.lists.slice(0, index), ...state.lists.slice(index + 1)],
+    lists: [...state.lists.filter((list) => list.id !== id)],
 })
 
 const addPageToList = (state, { url, index }) => {
@@ -108,21 +109,6 @@ const payloadReducer = (key) => (state, payload) => ({
     ...state,
     [key]: payload,
 })
-
-const toggleListFilterIndex = (state, index) => {
-    const { listFilterIndex } = state
-    if (listFilterIndex === null || listFilterIndex !== index) {
-        return {
-            ...state,
-            listFilterIndex: index,
-        }
-    }
-
-    return {
-        ...state,
-        listFilterIndex: null,
-    }
-}
 
 const setUrlDragged = (state, url) => {
     return {
@@ -183,7 +169,6 @@ export default createReducer(
         [actions.deleteList]: deleteList,
         [actions.addPagetoList]: addPageToList,
         [actions.showListDeleteModal]: showDeleteConfirm,
-        [actions.toggleListFilterIndex]: toggleListFilterIndex,
         [actions.resetListDeleteModal]: (state) => ({
             ...state,
             deleteConfirmProps: { ...defaultState.deleteConfirmProps },
@@ -196,6 +181,14 @@ export default createReducer(
         [actions.showCommonNameWarning]: showCommonNameWarning,
         [actions.removeCommonNameWarning]: removeCommonNameWarning,
         [actions.setShowCrowdFundingModal]: setShowCrowdFundingModal,
+        [actions.setInboxUnreadCount]: (state, inboxUnreadCount) => ({
+            ...state,
+            inboxUnreadCount,
+        }),
+        [actions.decInboxUnreadCount]: (state) => ({
+            ...state,
+            inboxUnreadCount: state.inboxUnreadCount - 1,
+        }),
     },
     defaultState,
 )

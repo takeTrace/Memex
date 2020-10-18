@@ -47,7 +47,8 @@
     min-height: var(--height);
     width: 100%;
     max-width: 800px;
-    box-shadow: rgb(143 143 143 / 0.05) 0px 4px 6px 4px, rgba(143, 143, 143, 0.05) 0px 2px 4px;
+    box-shadow: rgb(143 143 143 / 0.05) 0px 4px 6px 4px,
+        rgba(143, 143, 143, 0.05) 0px 2px 4px;
     transition: background 120ms ease-in 0s;
 
     &:hover {

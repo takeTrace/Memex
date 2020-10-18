@@ -1,50 +1,69 @@
 import { createSelector } from 'reselect'
-import { MOBILE_LIST_NAME } from '@worldbrain/memex-storage/lib/mobile-app/features/meta-picker/constants'
+import { SPECIAL_LIST_NAMES } from '@worldbrain/memex-storage/lib/lists/constants'
 
 import * as selectors from '../search-filters/selectors'
 
 export const customLists = (state) => state.customLists
 
+export const inboxUnreadCount = createSelector(
+    customLists,
+    (state) => state.inboxUnreadCount,
+)
 export const allLists = createSelector(customLists, (state) => state.lists)
 export const activeListIndex = createSelector(
     customLists,
     (state) => state.activeListIndex,
 )
 
-export const listFilterIndex = createSelector(
-    customLists,
-    (state) => state.listFilterIndex,
-)
-
 export const getSortedLists = createSelector(allLists, (lists) => {
     const mobileListIndex = lists.findIndex(
-        ({ name }) => name === MOBILE_LIST_NAME,
+        ({ name }) => name === SPECIAL_LIST_NAMES.MOBILE,
     )
 
     if (mobileListIndex === -1) {
-        return [{ name: MOBILE_LIST_NAME, id: -1 }, ...lists]
+        return [{ name: SPECIAL_LIST_NAMES.MOBILE, id: -1 }, ...lists]
     }
 
     return lists
 })
+
+const isSpecialList = (list) =>
+    [SPECIAL_LIST_NAMES.INBOX, SPECIAL_LIST_NAMES.MOBILE].includes(list.name)
+
+export const createdLists = createSelector(getSortedLists, (lists) =>
+    lists.filter((list) => !isSpecialList(list)),
+)
+export const specialLists = createSelector(getSortedLists, (lists) =>
+    lists.filter((list) => isSpecialList(list)),
+)
 
 export const getUrlsToEdit = createSelector(
     customLists,
     (state) => state.urlsToEdit,
 )
 
-export const results = createSelector(
-    getSortedLists,
+export const createdDisplayLists = createSelector(
+    createdLists,
     activeListIndex,
-    selectors.listFilter,
-    (lists, listIndex, listFilter) => {
-        return lists.map((pageDoc, i) => ({
+    selectors.listIdFilter,
+    (lists, listIndex, listFilter) =>
+        lists.map((pageDoc, i) => ({
             ...pageDoc,
             isEditing: i === listIndex,
             isFilterIndex: Number(listFilter) === pageDoc.id,
-            isMobileList: pageDoc.name === MOBILE_LIST_NAME,
-        }))
-    },
+            isMobileList: false,
+        })),
+)
+
+export const specialDisplayLists = createSelector(
+    specialLists,
+    selectors.listIdFilter,
+    (lists, listFilter) =>
+        lists.map((pageDoc) => ({
+            ...pageDoc,
+            isFilterIndex: Number(listFilter) === pageDoc.id,
+            isMobileList: pageDoc.name === SPECIAL_LIST_NAMES.MOBILE,
+        })),
 )
 
 export const deleteConfirmProps = createSelector(
@@ -103,7 +122,7 @@ export const showCrowdFundingModal = createSelector(
 )
 
 export const activeCollectionName = createSelector(
-    selectors.listFilter,
+    selectors.listIdFilter,
     allLists,
     (listFilterId, lists) =>
         listFilterId

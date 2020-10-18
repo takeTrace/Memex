@@ -157,7 +157,6 @@ class PopupContainer extends PureComponent<Props> {
         collections.fetchPageLists({ url: this.props.url })
 
     renderChildren() {
-
         if (this.props.showTagsPicker) {
             return (
                 <TagPicker
@@ -198,16 +197,14 @@ class PopupContainer extends PureComponent<Props> {
                 </div>
                 <hr />
                 <BottomBarBox>
-                <Search
-                    searchValue={this.props.searchValue}
-                    onSearchChange={this.props.handleSearchChange}
-                    onSearchEnter={this.onSearchEnter}
-                />
+                    <Search
+                        searchValue={this.props.searchValue}
+                        onSearchChange={this.props.handleSearchChange}
+                        onSearchEnter={this.onSearchEnter}
+                    />
                 </BottomBarBox>
                 <div className={styles.item}>
-                    <LinkButton
-                        goToDashboard={this.onSearchClick}
-                    />
+                    <LinkButton goToDashboard={this.onSearchClick} />
                 </div>
                 <div className={styles.item}>
                     <TagsButton />
@@ -237,11 +234,17 @@ class PopupContainer extends PureComponent<Props> {
                     </a>
                     <div className={styles.buttonBox}>
                         <div
-                            onClick={()=>window.open(`${constants.OPTIONS_URL}#/settings`)}
+                            onClick={() =>
+                                window.open(
+                                    `${constants.OPTIONS_URL}#/settings`,
+                                )
+                            }
                             className={btnStyles.settings}
                         />
                         <div
-                            onClick={()=>window.open("https://worldbrain.io/help")}
+                            onClick={() =>
+                                window.open('https://worldbrain.io/help')
+                            }
                             className={btnStyles.help}
                         />
                         {/*<NotifButton />*/}

@@ -20,6 +20,7 @@ import { runInBackground } from 'src/util/webextensionRPC'
 import { ReadwiseInterface } from 'src/readwise-integration/background/types/remote-interface'
 import { AuthContextInterface } from 'src/authentication/background/types'
 import { userAuthorizedForReadwise } from './utils'
+import analytics from 'src/analytics'
 
 class ReadwiseSettingsContainer extends React.Component<
     AuthContextInterface & { showSubscriptionModal: () => void }
@@ -67,16 +68,36 @@ class ReadwiseSettings extends StatefulUIElement<
         return (
             <div>
                 {selectors.showSyncError(this.state) && (
-                    <div>
+                    <ErrorMessage>
                         Something went wrong syncing your existing
                         annotations...
-                    </div>
+                    </ErrorMessage>
                 )}
                 {selectors.showSyncRunning(this.state) && (
-                    <div>Syncing your existing annotations...</div>
+                    <SuccessMessage>Syncing your existing annotations...</SuccessMessage>
                 )}
             </div>
         )
+    }
+
+    confirmSyncKey() {
+
+        this.processEvent('saveAPIKey', null)
+
+        analytics.trackEvent({
+            category: 'Readwise',
+            action: 'setupReadwise',
+        })
+    }
+
+    removeSyncKey() {
+
+        this.processEvent('removeAPIKey', null)
+
+        analytics.trackEvent({
+            category: 'Readwise',
+            action: 'removeReadwise',
+        })
     }
 
     renderForm() {
@@ -138,7 +159,7 @@ class ReadwiseSettings extends StatefulUIElement<
                         <div>
                             <PrimaryAction
                                 onClick={() =>
-                                    this.processEvent('saveAPIKey', null)
+                                    this.confirmSyncKey()
                                 }
                                 label={'Confirm'}
                             />
@@ -147,7 +168,7 @@ class ReadwiseSettings extends StatefulUIElement<
                     {selectors.showKeyRemoveButton(this.state) && (
                         <SecondaryAction
                             onClick={() =>
-                                this.processEvent('removeAPIKey', null)
+                                this.removeSyncKey()
                             }
                             label={'Remove'}
                         />
@@ -175,11 +196,11 @@ class ReadwiseSettings extends StatefulUIElement<
     render() {
         return (
             <>
-                {selectors.showUnauthorized(this.state) &&
-                    this.renderUnauthorized()}
-                {selectors.showForm(this.state) && this.renderForm()}
                 {selectors.showSyncScreen(this.state) &&
                     this.renderSyncScreen()}
+                {selectors.showUnauthorized(this.state) && 
+                    this.renderUnauthorized()}
+                {selectors.showForm(this.state) && this.renderForm()}
                 {selectors.showLoadingError(this.state) &&
                     'Something went wrong loading your ReadWise.io settings'}
             </>

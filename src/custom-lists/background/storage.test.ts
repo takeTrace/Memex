@@ -2,10 +2,11 @@ import CustomListBackground from './'
 import * as DATA from './storage.test.data'
 import { setupBackgroundIntegrationTest } from 'src/tests/background-integration-tests'
 import { SearchIndex } from 'src/search'
-import { injectFakeTabs } from 'src/tab-management/background/index.tests'
-import { TEST_TAB_1 } from 'src/tests/common-fixtures.data'
-import { page } from 'src/sidebar-overlay/sidebar/selectors'
 import { normalizeUrl } from '@worldbrain/memex-url-utils'
+import {
+    SPECIAL_LIST_NAMES,
+    SPECIAL_LIST_IDS,
+} from '@worldbrain/memex-storage/lib/lists/constants'
 
 async function insertTestData({
     customLists,
@@ -24,8 +25,12 @@ async function insertTestData({
     await customLists.insertPageToList(DATA.PAGE_ENTRY_4)
 }
 
-async function setupTest() {
-    const { backgroundModules } = await setupBackgroundIntegrationTest({
+async function setupTest({ skipTestData }: { skipTestData?: boolean } = {}) {
+    const {
+        fetchPageDataProcessor,
+        backgroundModules,
+        storageManager,
+    } = await setupBackgroundIntegrationTest({
         includePostSyncProcessor: true,
     })
     const customLists: CustomListBackground = backgroundModules.customLists
@@ -35,9 +40,17 @@ async function setupTest() {
     let fakeListCount = 0
     customLists.generateListId = () => ++fakeListCount
 
-    await insertTestData({ customLists })
+    if (!skipTestData) {
+        await insertTestData({ customLists })
+    }
 
-    return { customLists, searchIndex, pages: backgroundModules.pages }
+    return {
+        ...backgroundModules,
+        customLists,
+        searchIndex,
+        storageManager,
+        fetchPageDataProcessor,
+    }
 }
 
 describe('Custom List Integrations', () => {
@@ -81,6 +94,219 @@ describe('Custom List Integrations', () => {
             const newPage = await searchIndex.getPage(url)
             expect(newPage.url).toBe(url.substring(11))
         })
+
+        test('should be able to create inbox list if absent', async () => {
+            const { customLists } = await setupTest({ skipTestData: true })
+
+            const createdAt = new Date()
+            expect(
+                await customLists.fetchListByName({
+                    name: SPECIAL_LIST_NAMES.INBOX,
+                }),
+            ).toEqual(null)
+            await customLists.createInboxListIfAbsent({ createdAt })
+            expect(
+                await customLists.fetchListByName({
+                    name: SPECIAL_LIST_NAMES.INBOX,
+                }),
+            ).toEqual({
+                name: SPECIAL_LIST_NAMES.INBOX,
+                id: SPECIAL_LIST_IDS.INBOX,
+                isDeletable: false,
+                isNestable: false,
+                createdAt,
+            })
+        })
+
+        test('should not recreate inbox list if already exists', async () => {
+            const { customLists } = await setupTest({ skipTestData: true })
+
+            const createdAt = new Date()
+            await customLists.createInboxListIfAbsent({ createdAt })
+            expect(
+                await customLists.fetchListByName({
+                    name: SPECIAL_LIST_NAMES.INBOX,
+                }),
+            ).toEqual(
+                expect.objectContaining({
+                    name: SPECIAL_LIST_NAMES.INBOX,
+                    id: SPECIAL_LIST_IDS.INBOX,
+                    isDeletable: false,
+                    isNestable: false,
+                }),
+            )
+            await customLists.createInboxListIfAbsent({
+                createdAt,
+            })
+            expect(
+                await customLists.fetchListByName({
+                    name: SPECIAL_LIST_NAMES.INBOX,
+                }),
+            ).toEqual({
+                name: SPECIAL_LIST_NAMES.INBOX,
+                id: SPECIAL_LIST_IDS.INBOX,
+                isDeletable: false,
+                isNestable: false,
+                createdAt,
+            })
+        })
+
+        test('should be able to create inbox list entries', async () => {
+            const { customLists } = await setupTest({
+                skipTestData: true,
+            })
+
+            const createdAt = new Date()
+
+            expect(
+                await customLists.fetchListByName({
+                    name: SPECIAL_LIST_NAMES.INBOX,
+                }),
+            ).toEqual(null)
+
+            await customLists.createInboxListEntry({
+                fullUrl: DATA.PAGE_ENTRY_1.url,
+                createdAt,
+            })
+
+            expect(
+                await customLists.fetchListByName({
+                    name: SPECIAL_LIST_NAMES.INBOX,
+                }),
+            ).toEqual({
+                name: SPECIAL_LIST_NAMES.INBOX,
+                id: SPECIAL_LIST_IDS.INBOX,
+                isDeletable: false,
+                isNestable: false,
+                createdAt,
+            })
+
+            expect(
+                await customLists.fetchListPagesById({
+                    id: SPECIAL_LIST_IDS.INBOX,
+                }),
+            ).toEqual([
+                {
+                    pageUrl: normalizeUrl(DATA.PAGE_ENTRY_1.url),
+                    listId: SPECIAL_LIST_IDS.INBOX,
+                    fullUrl: DATA.PAGE_ENTRY_1.url,
+                    createdAt,
+                },
+            ])
+            expect(await customLists.getInboxUnreadCount()).toBe(1)
+        })
+
+        test('should not be able to create inbox list entries for pages once already read', async () => {
+            const {
+                tags,
+                bookmarks,
+                customLists,
+                directLinking,
+                fetchPageDataProcessor,
+            } = await setupTest({
+                skipTestData: true,
+            })
+            const url1 = 'https://test.com'
+            const url2 = 'https://test.com/sub'
+            const url3 = 'https://worldbrain.com/sub'
+            const url4 = 'https://internet.com/sub'
+            const createdAt = new Date()
+
+            await customLists.createInboxListIfAbsent({ createdAt })
+
+            let checkInboxEntryCalls = 0
+            const checkInboxEntry = async (
+                url: string,
+                args: { shouldExist: boolean },
+            ) => {
+                checkInboxEntryCalls++
+                const listEntries = await customLists.fetchListPagesById({
+                    id: SPECIAL_LIST_IDS.INBOX,
+                })
+                const entry = listEntries.find((e) => e.fullUrl === url)
+
+                expect({
+                    calls: checkInboxEntryCalls,
+                    entry,
+                }).toEqual({
+                    calls: checkInboxEntryCalls,
+                    entry: args.shouldExist
+                        ? expect.objectContaining({
+                              pageUrl: normalizeUrl(url),
+                              listId: SPECIAL_LIST_IDS.INBOX,
+                              fullUrl: url,
+                          })
+                        : undefined,
+                })
+            }
+            const setMockFetchPage = (url: string) => {
+                fetchPageDataProcessor.mockPage = {
+                    fullUrl: url,
+                    url: normalizeUrl(url),
+                } as any
+            }
+
+            // Tag a page - new inbox entry should be created - tag again after deleting entry - no new entry created
+            setMockFetchPage(url1)
+            await checkInboxEntry(url1, { shouldExist: false })
+            await tags.addTagToPage({ url: url1, tag: 'test' })
+            await checkInboxEntry(url1, { shouldExist: true })
+            await customLists.removePageFromList({
+                id: SPECIAL_LIST_IDS.INBOX,
+                url: url1,
+            })
+            await checkInboxEntry(url1, { shouldExist: false })
+            await tags.addTagToPage({ url: url1, tag: 'test' })
+            await checkInboxEntry(url1, { shouldExist: false })
+
+            // Bookmark a page - new inbox entry should be created - re-bookmark after deleting entry - no new entry created
+            setMockFetchPage(url2)
+            await checkInboxEntry(url2, { shouldExist: false })
+            await bookmarks.addBookmark({ fullUrl: url2 })
+            await checkInboxEntry(url2, { shouldExist: true })
+            await customLists.removePageFromList({
+                id: SPECIAL_LIST_IDS.INBOX,
+                url: url2,
+            })
+            await checkInboxEntry(url2, { shouldExist: false })
+            await bookmarks.storage.delBookmark({ url: url2 })
+            await bookmarks.addBookmark({ fullUrl: url2 })
+            await checkInboxEntry(url2, { shouldExist: false })
+
+            // Annotate a page - new inbox entry should be created - annotate again after deleting entry - no new entry created
+            setMockFetchPage(url3)
+            await checkInboxEntry(url3, { shouldExist: false })
+            await directLinking.createAnnotation(
+                { tab: {} },
+                { pageUrl: url3, comment: 'test' },
+            )
+            await checkInboxEntry(url3, { shouldExist: true })
+            await customLists.removePageFromList({
+                id: SPECIAL_LIST_IDS.INBOX,
+                url: url3,
+            })
+            await checkInboxEntry(url3, { shouldExist: false })
+            await directLinking.createAnnotation(
+                { tab: {} },
+                { pageUrl: url3, comment: 'test' },
+            )
+            await checkInboxEntry(url3, { shouldExist: false })
+
+            // List a page - new inbox entry should be created - list page again after deleting entry - no new entry created
+            setMockFetchPage(url4)
+            await checkInboxEntry(url3, { shouldExist: false })
+            await checkInboxEntry(url4, { shouldExist: false })
+            const testListId = await customLists.createCustomList(DATA.LIST_1)
+            await customLists.insertPageToList({ id: testListId, url: url4 })
+            await checkInboxEntry(url4, { shouldExist: true })
+            await customLists.removePageFromList({
+                id: SPECIAL_LIST_IDS.INBOX,
+                url: url4,
+            })
+            await customLists.removePageFromList({ id: testListId, url: url4 })
+            await customLists.insertPageToList({ id: testListId, url: url4 })
+            await checkInboxEntry(url4, { shouldExist: false })
+        })
     })
 
     describe('read ops', () => {
@@ -92,7 +318,7 @@ describe('Custom List Integrations', () => {
             })
 
             checkDefined(lists)
-            expect(lists.length).toBe(3)
+            expect(lists.length).toBe(4)
         })
 
         test('fetch all lists, skipping mobile list', async () => {
@@ -103,7 +329,7 @@ describe('Custom List Integrations', () => {
             })
 
             checkDefined(lists)
-            expect(lists.length).toBe(3)
+            expect(lists.length).toBe(4)
         })
 
         test('fetch pages associated with list', async () => {
@@ -172,7 +398,7 @@ describe('Custom List Integrations', () => {
             })
 
             checkDefined(lists)
-            expect(lists.length).toBe(1)
+            expect(lists.length).toBe(2)
             expect(lists[0].id).not.toBe(1)
             expect(lists[0].id).not.toBe(2)
         })

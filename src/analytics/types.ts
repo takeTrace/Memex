@@ -37,10 +37,9 @@ export interface AnalyticsEvents {
         | 'createFromShortcut'
         | 'createFromContextMenu'
         | 'createHighlightGlobally'
-    Notes: 
-        | 'createNoteGlobally'
-    Bookmarks: 
-        | 'createBookmarkForPage' 
+    Notes: 'createNoteGlobally'
+    Bookmarks:
+        | 'createBookmarkForPage'
         | 'deleteForPage'
         | 'createBookmarkViaPopup'
     Pages:
@@ -65,8 +64,19 @@ export interface AnalyticsEvents {
         | 'failInitSync'
         | 'clickPairNewDevice'
         | 'generateQRPairingCode'
-    Collections: 'addPageToList' | 'create' | 'addPageViaPopup' | 'addPageViaDragAndDrop'
-    ContentSharing: 'shareList' | 'shareListEntryBatch' | 'unshareListEntry' | 'shareAnnotation' | 'CopyNoteLink' | 'CopyPageLink' | 'CopyCollectionLink'
+    Collections:
+        | 'addPageToList'
+        | 'create'
+        | 'addPageViaPopup'
+        | 'addPageViaDragAndDrop'
+    ContentSharing:
+        | 'shareList'
+        | 'shareListEntryBatch'
+        | 'unshareListEntry'
+        | 'shareAnnotation'
+        | 'CopyNoteLink'
+        | 'CopyPageLink'
+        | 'CopyCollectionLink'
     InPageTooltip:
         | 'highlightText'
         | 'annotateText'
@@ -106,6 +116,9 @@ export interface AnalyticsEvents {
         | 'changeIndexingSetting'
         | 'enableKeyboardShortcuts'
         | 'disableKeyboardShortcuts'
+    Readwise:
+        | 'setupReadwise'
+        | 'removeReadwise'
 }
 
 export interface AnalyticsEventInfo {

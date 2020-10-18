@@ -61,7 +61,7 @@ export const ANALYTICS_EVENTS: {
             description:
                 'The creation of an annotation without a specific initiator',
         },
-        createAnnotationGlobally: {
+        createAnnotationGlobally: {
             description:
                 'The creation of an annotation without a specific initiator',
         },
@@ -88,8 +88,7 @@ export const ANALYTICS_EVENTS: {
     },
     Notes: {
         createNoteGlobally: {
-            description:
-                'Highlight, Note or Annotation created',
+            description: 'Highlight, Note or Annotation created',
         },
     },
     ContentSharing: {
@@ -362,6 +361,14 @@ export const ANALYTICS_EVENTS: {
         },
         finish: {
             description: 'The finishing of an import process',
+        },
+    },
+    Readwise: {
+        setupReadwise: {
+            description: 'Readwise Key is saved and set up',
+        },
+        removeReadwise: {
+            description: 'Removing the Readwise Sync Key',
         },
     },
 }

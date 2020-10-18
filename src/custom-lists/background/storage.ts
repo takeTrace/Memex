@@ -6,8 +6,9 @@ import {
 import {
     COLLECTION_DEFINITIONS,
     COLLECTION_NAMES,
+    SPECIAL_LIST_NAMES,
+    SPECIAL_LIST_IDS,
 } from '@worldbrain/memex-storage/lib/lists/constants'
-import { MOBILE_LIST_NAME } from '@worldbrain/memex-storage/lib/mobile-app/features/meta-picker/constants'
 
 import { SuggestPlugin } from 'src/search/plugins'
 import { SuggestResult } from 'src/search/types'
@@ -17,6 +18,11 @@ import { STORAGE_VERSIONS } from 'src/storage/constants'
 export default class CustomListStorage extends StorageModule {
     static CUSTOM_LISTS_COLL = COLLECTION_NAMES.list
     static LIST_ENTRIES_COLL = COLLECTION_NAMES.listEntry
+
+    static filterOutSpecialListEntries = (entry: { listId: number }) =>
+        !Object.values<number>(SPECIAL_LIST_IDS).includes(entry.listId)
+    static filterOutSpecialLists = (list: { name: string }) =>
+        !Object.values<string>(SPECIAL_LIST_NAMES).includes(list.name)
 
     getConfig(): StorageModuleConfig {
         const collections = cloneDeep(
@@ -37,6 +43,11 @@ export default class CustomListStorage extends StorageModule {
                 createListEntry: {
                     collection: CustomListStorage.LIST_ENTRIES_COLL,
                     operation: 'createObject',
+                },
+                countListEntries: {
+                    collection: CustomListStorage.LIST_ENTRIES_COLL,
+                    operation: 'countObjects',
+                    args: { listId: '$listId:int' },
                 },
                 findListsIncluding: {
                     collection: CustomListStorage.CUSTOM_LISTS_COLL,
@@ -145,27 +156,40 @@ export default class CustomListStorage extends StorageModule {
         }
     }
 
-    async createMobileListIfAbsent({ id }: { id: number }): Promise<string> {
-        const foundMobileLists = await this.operation('findListsByNames', {
-            name: [MOBILE_LIST_NAME],
-        })
-        if (foundMobileLists.length) {
-            return foundMobileLists[0].id
+    async createInboxListIfAbsent({
+        createdAt = new Date(),
+    }: {
+        createdAt?: Date
+    }): Promise<number> {
+        const foundInboxList = await this.operation(
+            'findListByNameIgnoreCase',
+            { name: SPECIAL_LIST_NAMES.INBOX },
+        )
+        if (foundInboxList) {
+            return foundInboxList.id
         }
 
         return (
             await this.operation('createList', {
-                id,
-                name: MOBILE_LIST_NAME,
+                name: SPECIAL_LIST_NAMES.INBOX,
+                id: SPECIAL_LIST_IDS.INBOX,
                 isDeletable: false,
                 isNestable: false,
-                createdAt: new Date(),
+                createdAt,
             })
         ).object.id
     }
 
+    countListEntries(listId: number): Promise<number> {
+        return this.operation('countListEntries', { listId })
+    }
+
+    countInboxUnread(): Promise<number> {
+        return this.countListEntries(SPECIAL_LIST_IDS.INBOX)
+    }
+
     private filterMobileList = (lists: any[]): any[] =>
-        lists.filter((list) => list.name !== MOBILE_LIST_NAME)
+        lists.filter((list) => list.name !== SPECIAL_LIST_NAMES.MOBILE)
 
     async fetchAllLists({
         excludedIds = [],
@@ -227,16 +251,20 @@ export default class CustomListStorage extends StorageModule {
     }
 
     async fetchListPagesByUrl({ url }: { url: string }) {
-        const pages = await this.operation('findListEntriesByUrl', { url })
+        const pageEntries = await this.operation('findListEntriesByUrl', {
+            url,
+        })
 
         const entriesByListId = new Map<number, any[]>()
         const listIds = new Set<string>()
 
-        pages.forEach((page) => {
-            listIds.add(page.listId)
-            const current = entriesByListId.get(page.listId) || []
-            entriesByListId.set(page.listId, [...current, page.fullUrl])
-        })
+        pageEntries
+            .filter(CustomListStorage.filterOutSpecialListEntries)
+            .forEach((entry) => {
+                listIds.add(entry.listId)
+                const current = entriesByListId.get(entry.listId) || []
+                entriesByListId.set(entry.listId, [...current, entry.fullUrl])
+            })
 
         const lists: PageList[] = this.filterMobileList(
             await this.operation('findListsIncluding', {
@@ -260,7 +288,7 @@ export default class CustomListStorage extends StorageModule {
         name: string
         isDeletable?: boolean
         isNestable?: boolean
-    }) {
+    }): Promise<number> {
         const { object } = await this.operation('createList', {
             id,
             name,
@@ -300,10 +328,12 @@ export default class CustomListStorage extends StorageModule {
         listId,
         pageUrl,
         fullUrl,
+        createdAt = new Date(),
     }: {
         listId: number
         pageUrl: string
         fullUrl: string
+        createdAt?: Date
     }) {
         const idExists = Boolean(await this.fetchListById(listId))
 
@@ -312,7 +342,7 @@ export default class CustomListStorage extends StorageModule {
                 listId,
                 pageUrl,
                 fullUrl,
-                createdAt: new Date(),
+                createdAt,
             })
         }
     }
@@ -334,7 +364,7 @@ export default class CustomListStorage extends StorageModule {
         query: string
         limit?: number
     }): Promise<SuggestResult<string, number>> {
-        const suggestions = await this.operation(
+        const suggestions: SuggestResult<string, number> = await this.operation(
             SuggestPlugin.SUGGEST_OBJS_OP_ID,
             {
                 collection: CustomListStorage.CUSTOM_LISTS_COLL,
@@ -347,7 +377,9 @@ export default class CustomListStorage extends StorageModule {
             },
         )
 
-        return suggestions
+        return suggestions.filter(({ suggestion }) =>
+            CustomListStorage.filterOutSpecialLists({ name: suggestion }),
+        )
     }
 
     async fetchListNameSuggestions({

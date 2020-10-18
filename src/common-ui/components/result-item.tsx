@@ -15,7 +15,6 @@ import PageResultItem from './page-result-item'
 import SocialResultItem from './social-result-item'
 import SemiCircularRibbon from './semi-circular-ribbon'
 
-
 const styles = require('./result-item.css')
 
 // TODO (sidebar-refactor): I'm simply setting this up and passing this down
@@ -134,9 +133,7 @@ class ResultItem extends PureComponent<Props> {
                     [styles.isDeleting]: this.props.isDeleting,
                 })}
             >
-                <div
-                    className={styles.resultBoxItem}
-                >
+                <div className={styles.resultBoxItem}>
                     {this.props.isDeleting && (
                         <LoadingIndicator className={styles.deletingSpinner} />
                     )}
@@ -173,13 +170,13 @@ class ResultItem extends PureComponent<Props> {
                     </div>
                     {this.renderAnnotsList()}
                 </div>
-                
+
                 {this.props.isListFilterActive && (
-                <div className={styles.removeCollectionItemBox}>
+                    <div className={styles.removeCollectionItemBox}>
                         <SemiCircularRibbon
                             onClick={this.props.handleCrossRibbonClick}
                         />
-                </div>
+                    </div>
                 )}
             </li>
         )

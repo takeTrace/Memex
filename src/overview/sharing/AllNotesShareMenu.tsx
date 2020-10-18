@@ -18,7 +18,6 @@ import { TypographyTextNormal } from 'src/common-ui/components/design-library/ty
 import { copyToClipboard } from 'src/in-page-ui/tooltip/utils'
 import analytics from 'src/analytics'
 
-
 interface State {
     shareAllState: TaskState
     unshareAllState: TaskState

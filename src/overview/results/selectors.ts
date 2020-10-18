@@ -7,9 +7,10 @@ import { selectors as deleteConfSelectors } from '../delete-confirm-modal'
 import { PAGE_SIZE } from '../search-bar/constants'
 import * as sidebarLeft from '../sidebar-left/selectors'
 import { query, isEmptyQuery } from '../search-bar/selectors'
-import { listFilterActive, listFilter } from 'src/search-filters/selectors'
+import { listFilterActive, listIdFilter } from 'src/search-filters/selectors'
 import * as constants from './constants'
 import { ResultsByUrl } from '../types'
+import { SPECIAL_LIST_NAMES } from '@worldbrain/memex-storage/lib/lists/constants'
 
 /**
  * Either set display title to be the top-level title field, else look in content. Fallback is the URL.
@@ -55,7 +56,12 @@ export const isLoading = createSelector(
     resultsState,
     (state) => state.isLoading,
 )
-export const resultDocs = createSelector(resultsState, (state) => state.results)
+export const resultDocs = createSelector(resultsState, (state) =>
+    state.results.map((doc) => ({
+        ...doc,
+        lists: doc.lists.filter((list) => list !== SPECIAL_LIST_NAMES.INBOX),
+    })),
+)
 export const activeListIndex = createSelector(
     resultsState,
     (state) => state.activeListIndex,
@@ -243,7 +249,7 @@ export const isResultCopyPasterShown = createSelector(
 )
 
 export const showShareListIcon = createSelector(
-    listFilter,
+    listIdFilter,
     (listFilter) =>
         listFilter != null && listFilter.length > 0 && +listFilter !== -1,
 )

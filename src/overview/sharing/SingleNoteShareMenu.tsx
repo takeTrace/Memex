@@ -11,7 +11,6 @@ import { TypographyTextNormal } from 'src/common-ui/components/design-library/ty
 import { copyToClipboard } from 'src/annotations/content_script/utils'
 import analytics from 'src/analytics'
 
-
 interface State {
     // readyToRender: boolean
     // hasAnnotationBeenShared?: boolean
