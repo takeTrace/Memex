@@ -64,7 +64,6 @@ export default class CustomListBackground {
             fetchListPagesByUrl: this.fetchListPagesByUrl,
             fetchListIdsByUrl: this.fetchListIdsByUrl,
             fetchInitialListSuggestions: this.fetchInitialListSuggestions,
-            __fetchListNameSuggestions: this.__fetchListNameSuggestions,
             fetchListPagesById: this.fetchListPagesById,
             fetchPageLists: this.fetchPageLists,
             fetchListIgnoreCase: this.fetchListIgnoreCase,
@@ -328,19 +327,6 @@ export default class CustomListBackground {
         return suggestions.slice(0, limit)
     }
 
-    __fetchListNameSuggestions = async ({
-        name,
-        url,
-    }: {
-        name: string
-        url: string
-    }) => {
-        return this.storage.fetchListNameSuggestions({
-            name,
-            url: normalizeUrl(url),
-        })
-    }
-
     fetchListIgnoreCase = async ({ name }: { name: string }) => {
         return this.storage.fetchListIgnoreCase({
             name,
@@ -353,7 +339,7 @@ export default class CustomListBackground {
     }): Promise<string[]> => {
         const suggestions = await this.storage.suggestLists(args)
 
-        return suggestions.map(({ suggestion }) => suggestion)
+        return suggestions.map(({ name }) => name)
     }
 
     addOpenTabsToList = async (args: {

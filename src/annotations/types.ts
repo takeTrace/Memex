@@ -94,3 +94,10 @@ export type AnnotationSender = ({
     annotation: Annotation
     tabId: number
 }) => void
+
+export type TextTruncator = (
+    text: string,
+    opts?: { maxLength?: number; maxLineBreaks?: number },
+) => { text: string; isTooLong: boolean }
+
+export type SelectionIndices = [number, number]

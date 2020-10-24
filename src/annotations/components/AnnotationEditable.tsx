@@ -14,41 +14,11 @@ import AnnotationEdit, {
 } from 'src/annotations/components/AnnotationEdit'
 import TextTruncated from 'src/annotations/components/parts/TextTruncated'
 import { GenericPickerDependenciesMinusSave } from 'src/common-ui/GenericPicker/logic'
-import { SidebarAnnotationTheme } from '../types'
+import { SidebarAnnotationTheme, SelectionIndices } from '../types'
 import {
     AnnotationSharingInfo,
     AnnotationSharingAccess,
 } from 'src/content-sharing/ui/types'
-
-const getTruncatedTextObject: (
-    text: string,
-) => { isTextTooLong: boolean; text: string } = (text) => {
-    if (text.length > 280) {
-        const truncatedText = text.slice(0, 280) + '...'
-        return {
-            isTextTooLong: true,
-            text: truncatedText,
-        }
-    }
-
-    for (let i = 0, newlineCount = 0; i < text.length; ++i) {
-        if (text[i] === '\n') {
-            newlineCount++
-            if (newlineCount > 4) {
-                const truncatedText = text.slice(0, i)
-                return {
-                    isTextTooLong: true,
-                    text: truncatedText,
-                }
-            }
-        }
-    }
-
-    return {
-        isTextTooLong: false,
-        text,
-    }
-}
 
 export interface AnnotationEditableGeneralProps {}
 
@@ -66,7 +36,7 @@ export interface AnnotationEditableProps {
     body?: string
     comment?: string
     tags: string[]
-    hasBookmark?: boolean
+    isBookmarked?: boolean
     mode: AnnotationMode
     tagPickerDependencies: GenericPickerDependenciesMinusSave
     annotationFooterDependencies: AnnotationFooterEventProps
@@ -90,6 +60,7 @@ export default class AnnotationEditable extends React.Component<Props> {
     private annotEditRef = React.createRef<AnnotationEdit>()
     private boxRef: HTMLDivElement = null
     private removeEventListeners?: () => void
+    private cursorIndices: SelectionIndices
 
     static defaultProps: Partial<Props> = {
         mode: 'default',
@@ -106,7 +77,7 @@ export default class AnnotationEditable extends React.Component<Props> {
     }
 
     focus() {
-        this.annotEditRef?.current?.focus()
+        this.annotEditRef?.current?.focusOnInputEnd()
     }
 
     private get isEdited(): boolean {
@@ -129,9 +100,9 @@ export default class AnnotationEditable extends React.Component<Props> {
     private setupEventListeners = () => {
         if (this.boxRef) {
             const handleMouseEnter = () =>
-                this.props.onMouseEnter(this.props.url)
+                this.props.onMouseEnter?.(this.props.url)
             const handleMouseLeave = () =>
-                this.props.onMouseLeave(this.props.url)
+                this.props.onMouseLeave?.(this.props.url)
 
             this.boxRef.addEventListener('mouseenter', handleMouseEnter)
             this.boxRef.addEventListener('mouseleave', handleMouseLeave)
@@ -140,6 +111,23 @@ export default class AnnotationEditable extends React.Component<Props> {
                 this.boxRef.removeEventListener('mouseenter', handleMouseEnter)
                 this.boxRef.removeEventListener('mouseleave', handleMouseLeave)
             }
+        }
+    }
+
+    private handlePreviewToggle = () => {
+        const { annotationEditDependencies } = this.props
+
+        this.props.annotationEditDependencies.toggleEditPreview()
+
+        if (annotationEditDependencies.showPreview) {
+            // Allow some time to pass for render to occur - there's gotta be a better way
+            setTimeout(
+                () =>
+                    (this.annotEditRef.current.cursorIndex = this.cursorIndices),
+                250,
+            )
+        } else {
+            this.cursorIndices = this.annotEditRef.current.cursorIndex
         }
     }
 
@@ -165,13 +153,7 @@ export default class AnnotationEditable extends React.Component<Props> {
 
         return (
             <HighlightStyled>
-                <HighlightTextStyled>
-                    <TextTruncated
-                        isHighlight={true}
-                        text={this.props.body}
-                        getTruncatedTextObject={getTruncatedTextObject}
-                    />
-                </HighlightTextStyled>
+                <TextTruncated isHighlight={true} text={this.props.body} />
             </HighlightStyled>
         )
     }
@@ -179,6 +161,7 @@ export default class AnnotationEditable extends React.Component<Props> {
     private renderFooter() {
         const {
             annotationFooterDependencies,
+            annotationEditDependencies,
             onGoToAnnotation,
             ...props
         } = this.props
@@ -189,6 +172,7 @@ export default class AnnotationEditable extends React.Component<Props> {
                 {...annotationFooterDependencies}
                 isEdited={this.isEdited}
                 timestamp={this.getFormattedTimestamp()}
+                togglePreview={this.handlePreviewToggle}
             />
         )
     }
@@ -201,12 +185,36 @@ export default class AnnotationEditable extends React.Component<Props> {
             tagPickerDependencies,
         } = this.props
 
+        if (annotationEditDependencies.showPreview) {
+            return (
+                <>
+                    <AnnotationView
+                        toggleEditPreview={this.handlePreviewToggle}
+                        previewMode
+                        theme={this.theme}
+                        tags={annotationEditDependencies.tags}
+                        comment={annotationEditDependencies.comment}
+                        confirmEdit={() =>
+                            annotationEditDependencies.onEditConfirm(
+                                this.props.url,
+                            )
+                        }
+                        cancelEdit={() =>
+                            annotationEditDependencies.onEditCancel()
+                        }
+                        onEditIconClick={this.handlePreviewToggle}
+                    />
+                </>
+            )
+        }
+
         if (mode === 'edit') {
             return (
                 <AnnotationEdit
                     ref={this.annotEditRef}
                     {...this.props}
                     {...annotationEditDependencies}
+                    toggleEditPreview={this.handlePreviewToggle}
                     tagPickerDependencies={tagPickerDependencies}
                     rows={2}
                 />
@@ -216,9 +224,9 @@ export default class AnnotationEditable extends React.Component<Props> {
         return (
             <AnnotationView
                 {...this.props}
-                {...annotationFooterDependencies}
                 theme={this.theme}
-                getTruncatedTextObject={getTruncatedTextObject}
+                toggleEditPreview={this.handlePreviewToggle}
+                onEditIconClick={annotationFooterDependencies.onEditIconClick}
             />
         )
     }
@@ -266,26 +274,17 @@ const CopyPasterWrapper = styled.div`
     left: 70px;
 `
 
-const HighlightTextStyled = styled.span`
-    line-height: 25px;
-    font-style: normal;
-    background-color: #65ffc8;
-    color: #3a2f45;
-    padding: 2px 0;
-
-    & div {
-        background-color: none;
-    }
-`
+const HighlightTextStyled = styled.span``
 
 const HighlightStyled = styled.div`
     font-weight: 400;
     font-size: 14px;
     letter-spacing: 0.5px;
     margin: 0 0 5px 0;
-    padding: 15px 15px 7px 15px;
+    padding: 10px 15px 7px 10px;
     line-height: 20px;
     text-align: left;
+    line-break: normal;
 `
 
 const AnnotationStyled = styled.div`

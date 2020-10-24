@@ -34,7 +34,9 @@ export interface AnnotationFooterEventProps {
     onCopyPasterBtnClick: () => void
 }
 
-class AnnotationFooter extends React.Component<Props> {
+class AnnotationFooter extends React.Component<
+    Props & { togglePreview: () => void }
+> {
     private renderDefaultFooter() {
         const { isEdited, timestamp, isBookmarked } = this.props
 
@@ -138,6 +140,17 @@ class AnnotationFooter extends React.Component<Props> {
                     <DeleteConfirmStyled>Really?</DeleteConfirmStyled>
                 )}
                 <BtnContainerStyled>
+                    {mode === 'edit' && (
+                        <ButtonTooltip
+                        tooltipText="alt/option + Enter"
+                        position="bottom"
+                    >
+                            <ActionBtnStyled onClick={this.props.togglePreview}>
+                                Preview
+                            </ActionBtnStyled>
+                        </ButtonTooltip>
+                    )}
+                    <div>
                     <CancelBtnStyled onClick={cancelBtnHandler}>
                         Cancel
                     </CancelBtnStyled>
@@ -149,6 +162,7 @@ class AnnotationFooter extends React.Component<Props> {
                             {actionBtnText}
                         </ActionBtnStyled>
                     </ButtonTooltip>
+                    </div>
                 </BtnContainerStyled>
             </InnerFooterContainerStyled>
         )
@@ -217,6 +231,8 @@ const CancelBtnStyled = styled.button`
 const BtnContainerStyled = styled.div`
     display: flex;
     flex-direction: row-reverse;
+    justify-content: space-between;
+    width: 100%;
 `
 
 const InnerFooterContainerStyled = styled.div`

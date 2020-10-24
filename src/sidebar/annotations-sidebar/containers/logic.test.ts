@@ -206,6 +206,7 @@ describe('SidebarContainerLogic', () => {
                 commentText: editedComment,
                 isTagInputActive: false,
                 isBookmarked: false,
+                showPreview: false,
             })
             await sidebar.processEvent('switchAnnotationMode', {
                 context,
@@ -217,6 +218,7 @@ describe('SidebarContainerLogic', () => {
                 commentText: editedComment,
                 isTagInputActive: false,
                 isBookmarked: false,
+                showPreview: false,
             })
         })
 
@@ -286,6 +288,16 @@ describe('SidebarContainerLogic', () => {
             expect(sidebar.state.annotationSharingAccess).toEqual(
                 'feature-disabled',
             )
+        })
+
+        it('should be able to toggle sidebar lock', async ({ device }) => {
+            const { sidebar } = await setupLogicHelper({ device })
+
+            expect(sidebar.state.isLocked).toBe(false)
+            await sidebar.processEvent('lock', null)
+            expect(sidebar.state.isLocked).toBe(true)
+            await sidebar.processEvent('unlock', null)
+            expect(sidebar.state.isLocked).toBe(false)
         })
     })
 

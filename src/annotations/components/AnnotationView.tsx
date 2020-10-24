@@ -4,35 +4,28 @@ import styled, { ThemeProvider } from 'styled-components'
 import TextTruncated from 'src/annotations/components/parts/TextTruncated'
 import { SidebarAnnotationTheme } from '../types'
 
-export interface Props extends AnnotationFooterEventProps {
-    hasHighlight?: boolean
-    comment?: string
+export interface Props {
     tags: string[]
+    comment?: string
+    previewMode?: boolean
     theme: SidebarAnnotationTheme
     onTagClick?: (tag: string) => void
-    getTruncatedTextObject: (
-        text: string,
-    ) => {
-        isTextTooLong: boolean
-        text: string
-    }
-}
-
-export interface AnnotationFooterEventProps {
-    onDeleteConfirm: () => void
-    onDeleteCancel: () => void
-    onDeleteIconClick: () => void
-    onEditConfirm: () => void
-    onEditCancel: () => void
+    confirmEdit?: () => void
+    cancelEdit?: () => void
+    toggleEditPreview: () => void
     onEditIconClick: () => void
-    onShareClick: React.MouseEventHandler
-    onUnshareClick: React.MouseEventHandler
-    toggleBookmark: () => void
-    onCopyPasterBtnClick: () => void
 }
 
 /* tslint:disable-next-line variable-name */
 class AnnotationView extends React.Component<Props> {
+    private secretInputRef = React.createRef<HTMLInputElement>()
+
+    componentDidMount() {
+        if (this.props.previewMode) {
+            this.secretInputRef.current.focus()
+        }
+    }
+
     private bindHandleTagPillClick: (tag: string) => React.MouseEventHandler = (
         tag,
     ) => (event) => {
@@ -41,6 +34,31 @@ class AnnotationView extends React.Component<Props> {
 
         if (this.props.onTagClick) {
             return this.props.onTagClick(tag)
+        }
+    }
+
+    /**
+     * NOTE: This is used as a bit of a hack to afford using the same kb shortcuts
+     *  used in the note edit view to toggle markdown preview to untoggle it, and to save the edit.
+     */
+    private handleSecretInputKeyDown: React.KeyboardEventHandler = (e) => {
+        e.stopPropagation()
+
+        if (e.key === 'Enter') {
+            if (e.altKey) {
+                this.props.toggleEditPreview()
+                return
+            }
+
+            if (e.ctrlKey || e.metaKey) {
+                this.props.confirmEdit?.()
+                return
+            }
+        }
+
+        if (e.key === 'Escape') {
+            this.props.cancelEdit()
+            return
         }
     }
 
@@ -60,32 +78,40 @@ class AnnotationView extends React.Component<Props> {
     }
 
     render() {
-        const { comment, tags } = this.props
+        const { comment, tags, theme, onEditIconClick } = this.props
 
         return (
-            <ThemeProvider theme={this.props.theme}>
-                {this.props.comment?.length > 0 && 
-                    <CommentBox onClick={this.props.onEditIconClick} hasHighlight={this.props.hasHighlight}>
+            <ThemeProvider theme={theme}>
+                <SecretInput
+                    type="button"
+                    ref={this.secretInputRef}
+                    onKeyDown={this.handleSecretInputKeyDown}
+                />
+                {comment?.length > 0 && (
+                    <CommentBox>
                         <TextTruncated
                             isHighlight={false}
                             text={comment}
-                            getTruncatedTextObject={
-                                this.props.getTruncatedTextObject
-                            }
+                            onCommentEditClick={onEditIconClick}
+                            skipTruncation={this.props.previewMode}
                         />
                     </CommentBox>
-                }
-                {this.props.tags?.length > 0 && 
-                    <TagBox>
-                        {this.renderTags()}
-                    </TagBox>
-                }
+                )}
+                {tags?.length > 0 && <TagBox>{this.renderTags()}</TagBox>}
             </ThemeProvider>
         )
     }
 }
 
 export default AnnotationView
+
+const SecretInput = styled.input`
+    width: 0;
+    height: 0;
+    border: none;
+    outline: none;
+    background: none;
+`
 
 const TagPillStyled = styled.div`
     background-color: #83c9f4;
@@ -134,5 +160,4 @@ const CommentBox = styled.div`
     `}
 `
 
-const TagBox = styled.div `
-`
+const TagBox = styled.div``

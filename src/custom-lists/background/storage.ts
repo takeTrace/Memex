@@ -111,6 +111,7 @@ export default class CustomListStorage extends StorageModule {
                         },
                         {
                             name: '$name:string',
+                            searchableName: '$name:string',
                             // updatedAt: '$updatedAt:any',
                         },
                     ],
@@ -188,9 +189,6 @@ export default class CustomListStorage extends StorageModule {
         return this.countListEntries(SPECIAL_LIST_IDS.INBOX)
     }
 
-    private filterMobileList = (lists: any[]): any[] =>
-        lists.filter((list) => list.name !== SPECIAL_LIST_NAMES.MOBILE)
-
     async fetchAllLists({
         excludedIds = [],
         limit,
@@ -211,7 +209,7 @@ export default class CustomListStorage extends StorageModule {
         const prepared = lists.map((list) => this.prepareList(list))
 
         if (skipMobileList) {
-            return this.filterMobileList(prepared)
+            return prepared.filter(CustomListStorage.filterOutSpecialLists)
         }
 
         return prepared
@@ -266,11 +264,11 @@ export default class CustomListStorage extends StorageModule {
                 entriesByListId.set(entry.listId, [...current, entry.fullUrl])
             })
 
-        const lists: PageList[] = this.filterMobileList(
+        const lists: PageList[] = (
             await this.operation('findListsIncluding', {
                 includedIds: [...listIds],
-            }),
-        )
+            })
+        ).filter(CustomListStorage.filterOutSpecialLists)
 
         return lists.map((list) => {
             const entries = entriesByListId.get(list.id)
@@ -292,8 +290,9 @@ export default class CustomListStorage extends StorageModule {
         const { object } = await this.operation('createList', {
             id,
             name,
-            isDeletable,
             isNestable,
+            isDeletable,
+            searchableName: name,
             createdAt: new Date(),
         })
 
@@ -363,58 +362,25 @@ export default class CustomListStorage extends StorageModule {
     }: {
         query: string
         limit?: number
-    }): Promise<SuggestResult<string, number>> {
+    }): Promise<PageList[]> {
         const suggestions: SuggestResult<string, number> = await this.operation(
             SuggestPlugin.SUGGEST_OBJS_OP_ID,
             {
                 collection: CustomListStorage.CUSTOM_LISTS_COLL,
-                query: { name: query },
+                query: { nameTerms: query },
                 options: {
+                    multiEntryAssocField: 'name',
                     includePks: true,
-                    ignoreCase: ['name'],
                     limit,
                 },
             },
         )
 
-        return suggestions.filter(({ suggestion }) =>
-            CustomListStorage.filterOutSpecialLists({ name: suggestion }),
-        )
-    }
-
-    async fetchListNameSuggestions({
-        name,
-        url,
-    }: {
-        name: string
-        url: string
-    }) {
-        const suggestions = await this.suggestLists({ query: name })
-        const listIds = suggestions.map(({ pk }) => pk)
-
-        const lists: PageList[] = suggestions.map(({ pk, suggestion }) => ({
-            id: pk,
-            name: suggestion,
-        }))
-
-        const pageEntries = await this.operation('findListEntriesByLists', {
-            listIds,
-            url,
+        const suggestedLists = await this.operation('findListsIncluding', {
+            includedIds: suggestions.map(({ pk }) => pk),
         })
 
-        const entriesByListId = new Map<number, any[]>()
-
-        pageEntries.forEach((page) => {
-            const current = entriesByListId.get(page.listId) || []
-            entriesByListId.set(page.listId, [...current, page.fullUrl])
-        })
-
-        return this.filterMobileList(
-            lists.map((list) => {
-                const entries = entriesByListId.get(list.id)
-                return this.prepareList(list, entries, entries != null)
-            }),
-        )
+        return suggestedLists.filter(CustomListStorage.filterOutSpecialLists)
     }
 
     async fetchListIgnoreCase({ name }: { name: string }) {

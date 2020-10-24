@@ -23,14 +23,15 @@ import {
 import { areTagsEquivalent } from 'src/tags/utils'
 import { FocusableComponent } from 'src/annotations/components/types'
 
-interface EditForm {
+export interface EditForm {
+    showPreview: boolean
     isBookmarked: boolean
     isTagInputActive: boolean
     commentText: string
     tags: string[]
 }
 
-interface EditForms {
+export interface EditForms {
     [annotationUrl: string]: EditForm
 }
 
@@ -40,6 +41,7 @@ export interface SidebarContainerState {
     secondarySearchState: TaskState
 
     showState: 'visible' | 'hidden'
+    isLocked: boolean
 
     annotationSharingAccess: AnnotationSharingAccess
     annotationSharingInfo: {
@@ -96,11 +98,15 @@ export interface SidebarContainerState {
 export type SidebarContainerEvents = UIEvent<{
     show: null
     hide: null
+    lock: null
+    unlock: null
 
     // Adding a new page comment
     addNewPageComment: { comment?: string; tags?: string[] }
     setNewPageCommentAnchor: { anchor: Anchor }
     changeNewPageCommentText: { comment: string }
+    setEditPreview: { annotationUrl: string; showPreview: boolean }
+    cancelEdit: { annotationUrl: string }
     changeEditCommentText: { annotationUrl: string; comment: string }
     saveNewPageComment: null
     cancelNewPageComment: null
@@ -209,6 +215,7 @@ type EventHandler<
 > = UIEventHandler<SidebarContainerState, SidebarContainerEvents, EventName>
 
 export const INIT_FORM_STATE: EditForm = {
+    showPreview: false,
     isBookmarked: false,
     isTagInputActive: false,
     commentText: '',
@@ -247,6 +254,7 @@ export class SidebarContainerLogic extends UILogic<
             primarySearchState: 'pristine',
             secondarySearchState: 'pristine',
 
+            isLocked: false,
             pageUrl: this.options.pageUrl,
             showState: this.options.initialState ?? 'hidden',
             annotationModes: {
@@ -349,6 +357,11 @@ export class SidebarContainerLogic extends UILogic<
     show: EventHandler<'show'> = async () => {
         this.emitMutation({ showState: { $set: 'visible' } })
     }
+
+    lock: EventHandler<'lock'> = () =>
+        this.emitMutation({ isLocked: { $set: true } })
+    unlock: EventHandler<'unlock'> = () =>
+        this.emitMutation({ isLocked: { $set: false } })
 
     private doSearch = debounce(this._doSearch, 300)
 
@@ -496,6 +509,33 @@ export class SidebarContainerLogic extends UILogic<
     ) => {
         this.emitMutation({
             // commentBox: { anchor: { $set: incoming.event.anchor } },
+        })
+    }
+
+    cancelEdit: EventHandler<'cancelEdit'> = ({ event }) => {
+        this.emitMutation({
+            annotationModes: {
+                pageAnnotations: {
+                    [event.annotationUrl]: {
+                        $set: 'default',
+                    },
+                },
+            },
+            editForms: {
+                [event.annotationUrl]: {
+                    showPreview: { $set: false },
+                },
+            },
+        })
+    }
+
+    setEditPreview: EventHandler<'setEditPreview'> = ({ event }) => {
+        this.emitMutation({
+            editForms: {
+                [event.annotationUrl]: {
+                    showPreview: { $set: event.showPreview },
+                },
+            },
         })
     }
 

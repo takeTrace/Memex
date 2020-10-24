@@ -33,6 +33,7 @@ const DEF_CONTEXT: { context: AnnotationEventContext } = {
 
 export interface Props extends SidebarContainerOptions {
     skipTopBarRender?: boolean
+    isLockable?: boolean
 }
 
 export class AnnotationsSidebarContainer<
@@ -59,11 +60,18 @@ export class AnnotationsSidebarContainer<
         this.processEvent('hide', null)
     }
 
+    toggleSidebarLock = () =>
+        this.processEvent(this.state.isLocked ? 'unlock' : 'lock', null)
+
     setPageUrl = (pageUrl: string) => {
         this.processEvent('setPageUrl', { pageUrl })
     }
 
     private handleClickOutside = (e) => {
+        if (this.state.isLocked) {
+            return
+        }
+
         if (this.props.onClickOutside) {
             return this.props.onClickOutside(e)
         }
@@ -110,10 +118,8 @@ export class AnnotationsSidebarContainer<
                     ...DEF_CONTEXT,
                 }),
             onEditCancel: () =>
-                this.processEvent('switchAnnotationMode', {
+                this.processEvent('cancelEdit', {
                     annotationUrl: annotation.url,
-                    mode: 'default',
-                    ...DEF_CONTEXT,
                 }),
             onEditConfirm: () =>
                 this.processEvent('editAnnotation', {
@@ -157,6 +163,12 @@ export class AnnotationsSidebarContainer<
             isTagInputActive: form.isTagInputActive,
             comment: form.commentText,
             tags: form.tags,
+            showPreview: form.showPreview,
+            toggleEditPreview: () =>
+                this.processEvent('setEditPreview', {
+                    annotationUrl: annotation.url,
+                    showPreview: !form.showPreview,
+                }),
             updateTags: (args) =>
                 this.processEvent('updateTagsForEdit', {
                     annotationUrl: annotation.url,
@@ -183,10 +195,8 @@ export class AnnotationsSidebarContainer<
                     ...DEF_CONTEXT,
                 }),
             onEditCancel: () =>
-                this.processEvent('switchAnnotationMode', {
+                this.processEvent('cancelEdit', {
                     annotationUrl: annotation.url,
-                    mode: 'default',
-                    ...DEF_CONTEXT,
                 }),
         }
     }
@@ -374,14 +384,40 @@ export class AnnotationsSidebarContainer<
         return (
             <>
                 <TopBarContainerStyled>
-                    <ButtonTooltip
-                        tooltipText="Close (ESC)"
-                        position="rightCentered"
-                    >
-                        <CloseBtn onClick={() => this.hideSidebar()}>
-                            <ActionIcon src={icons.close} />
-                        </CloseBtn>
-                    </ButtonTooltip>
+                    <TopBarActionBtns>
+                        <ButtonTooltip
+                            tooltipText="Close (ESC)"
+                            position="rightCentered"
+                        >
+                            <CloseBtn onClick={() => this.hideSidebar()}>
+                                <ActionIcon src={icons.close} />
+                            </CloseBtn>
+                        </ButtonTooltip>
+                        {this.props.isLockable &&
+                            (this.state.isLocked ? (
+                                <ButtonTooltip
+                                    tooltipText="Unlock sidebar"
+                                    position="rightCentered"
+                                >
+                                    <CloseBtn onClick={this.toggleSidebarLock}>
+                                        <SidebarLockIconReverse
+                                            src={icons.doubleArrow}
+                                        />
+                                    </CloseBtn>
+                                </ButtonTooltip>
+                            ) : (
+                                <ButtonTooltip
+                                    tooltipText="Lock sidebar open"
+                                    position="rightCentered"
+                                >
+                                    <CloseBtn onClick={this.toggleSidebarLock}>
+                                        <SidebarLockIcon
+                                            src={icons.doubleArrow}
+                                        />
+                                    </CloseBtn>
+                                </ButtonTooltip>
+                            ))}
+                    </TopBarActionBtns>
                     <TopBarActionBtns>
                         <ButtonTooltip
                             tooltipText="Copy All Notes"
@@ -550,6 +586,18 @@ const CloseBtn = styled.button`
 const ActionIcon = styled.img`
     height: 90%;
     width: auto;
+`
+
+const SidebarLockIcon = styled.img`
+    height: 100%;
+    width: auto;
+`
+
+const SidebarLockIconReverse = styled.img`
+    width: auto;
+    height: 100%;
+    transform: rotate(180deg);
+    animation: 0.2s cubic-bezier(0.65, 0.05, 0.36, 1);
 `
 
 // TODO: inheirits from .nakedSquareButton
